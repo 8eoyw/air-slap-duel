@@ -1,0 +1,48 @@
+menu "Air Slap Duel referee"
+
+choice SLAP_MODE
+    prompt "Referee mode"
+    default SLAP_MODE_BLE
+    config SLAP_MODE_BLE
+        bool "BLE central (this chip connects to both wearables; needs NimBLE, see sdkconfig.defaults)"
+    config SLAP_MODE_UART
+        bool "UART (nano_hub runs the referee, this chip renders)"
+endchoice
+
+if SLAP_MODE_UART
+config SLAP_UART_NUM
+    int "UART port"
+    default 1
+config SLAP_UART_TX_GPIO
+    int "TX GPIO (to hub RX)"
+    default 17
+config SLAP_UART_RX_GPIO
+    int "RX GPIO (from hub TX / D1)"
+    default 18
+endif
+
+config SLAP_LLM_TAUNT
+    bool "Ask the cloud LLM for a taunt after each hit (xiaozhi_glue only)"
+    default n
+
+config SLAP_SERVO_GPIO
+    int "Servo signal GPIO (-1 = no servo)"
+    default -1
+    range -1 48
+
+if SLAP_SERVO_GPIO >= 0
+config SLAP_SERVO_LEDC_TIMER
+    int "LEDC timer for the servo"
+    default 2
+    range 0 3
+config SLAP_SERVO_LEDC_CHANNEL
+    int "LEDC channel for the servo"
+    default 5
+    range 0 7
+config SLAP_SERVO_REST_DEG
+    int "Servo rest angle"
+    default 60
+    range 0 110
+endif
+
+endmenu

@@ -1,42 +1,45 @@
 // IMU data collection: streams "t_ms,ax,ay,az,gx,gy,gz" over serial at SAMPLE_HZ.
-// Record with tools/serial_to_csv.py. Send 'r' to start a take, 's' to stop.
-// Copy firmware/common/*.h into this sketch folder before compiling (Arduino IDE
-// only sees files inside the sketch directory).
-#include "board.h"
+// Driven by tools/collect_session.py (or send 'r' to start a take, 's' to stop).
+//
+// arduino-cli compile -b arduino:mbed_nano:nano33ble --library ../libraries/SlapCommon .
+#include <slap_board.h>
 
 const unsigned long PERIOD_US = 1000000UL / SAMPLE_HZ;
 bool recording = false;
 unsigned long nextUs = 0;
+float last[6] = {0, 0, 1, 0, 0, 0};
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
+  pinMode(LED_BUILTIN, OUTPUT);
   if (!IMU.begin()) {
     Serial.println("# IMU init failed");
     while (true) {}
   }
-  Serial.println("# ready: send r to record, s to stop");
+  Serial.print("# ready rev="); Serial.print(NANO_REV);
+  Serial.print(" hz="); Serial.println(SAMPLE_HZ);
 }
 
 void loop() {
-  if (Serial.available()) {
+  while (Serial.available()) {
     char c = Serial.read();
-    if (c == 'r') { recording = true;  Serial.println("# start"); }
-    if (c == 's') { recording = false; Serial.println("# stop"); }
+    if (c == 'r') { recording = true;  nextUs = micros(); digitalWrite(LED_BUILTIN, HIGH); Serial.println("# start"); }
+    if (c == 's') { recording = false; digitalWrite(LED_BUILTIN, LOW); Serial.println("# stop"); }
   }
   if (!recording) return;
 
   unsigned long now = micros();
   if ((long)(now - nextUs) < 0) return;
-  nextUs = now + PERIOD_US;
+  nextUs += PERIOD_US;
 
-  float ax, ay, az, gx, gy, gz;
-  if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable()) {
-    IMU.readAcceleration(ax, ay, az);  // g
-    IMU.readGyroscope(gx, gy, gz);     // dps
-    Serial.print(millis()); Serial.print(',');
-    Serial.print(ax, 3); Serial.print(','); Serial.print(ay, 3); Serial.print(',');
-    Serial.print(az, 3); Serial.print(','); Serial.print(gx, 1); Serial.print(',');
-    Serial.print(gy, 1); Serial.print(','); Serial.println(gz, 1);
+  // Hold the previous value if the IMU has no new sample, so rows stay at a fixed rate.
+  if (IMU.accelerationAvailable()) IMU.readAcceleration(last[0], last[1], last[2]);  // g
+  if (IMU.gyroscopeAvailable()) IMU.readGyroscope(last[3], last[4], last[5]);        // dps
+  Serial.print(millis());
+  for (int i = 0; i < 6; i++) {
+    Serial.print(',');
+    Serial.print(last[i], i < 3 ? 3 : 1);
   }
+  Serial.println();
 }

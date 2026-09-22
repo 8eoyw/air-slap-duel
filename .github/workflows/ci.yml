@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  referee-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C tests
+
+  nano-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:mbed_nano
+          arduino-cli lib install ArduinoBLE Arduino_BMI270_BMM150 Arduino_LSM9DS1 Chirale_TensorFLowLite
+      - name: compile sketches (heuristic classifier)
+        run: |
+          for s in imu_collect nano_attacker nano_defender nano_hub; do
+            arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon firmware/$s
+          done
+
+  ml-pipeline:
+    runs-on: ubuntu-latest
+    needs: nano-firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r ml/requirements.txt
+      - name: synthetic data -> train -> model.h
+        run: |
+          python tools/synth_data.py --subjects 4 --takes 20
+          cd ml && python train.py --task attacker --data ../data_synth --epochs 10
+      - uses: arduino/setup-arduino-cli@v2
+      - name: compile attacker with the trained model (TFLite Micro path)
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:mbed_nano
+          arduino-cli lib install ArduinoBLE Arduino_BMI270_BMM150 Arduino_LSM9DS1 Chirale_TensorFLowLite
+          cp ml/out/attacker/model.h firmware/nano_attacker/
+          arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon firmware/nano_attacker
+
+  referee-esp-idf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4.1
+          target: esp32s3
+          path: firmware/referee_xiaozhi/standalone

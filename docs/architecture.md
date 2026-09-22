@@ -32,7 +32,7 @@ SWAP ──否则──→ ANNOUNCE
 | `Δ < 200 ms` | 抢跑，视为命中 | 同 HIT |
 | 方向错误 | 擦过 GRAZE | HIT 的一半 |
 
-参数集中放在 `firmware/referee_xiaozhi/game_config.h`。
+参数集中放在 `firmware/libraries/SlapCommon/src/slap_game_config.h`（可用 -D 覆盖）。
 
 ## 数据流与带宽
 

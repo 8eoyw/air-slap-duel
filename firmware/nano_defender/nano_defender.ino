@@ -1,6 +1,5 @@
-// Attacker node (strap on the back of the hand).
-// With ml/out/attacker/model.h copied here -> TFLite Micro classifier.
-// Without it -> heuristic classifier, enough to test BLE + referee end to end.
+// Defender node (headband or wrist). Same runtime as the attacker, own model.
+// Copy ml/out/defender/model.h here once trained.
 //
 // arduino-cli compile -b arduino:mbed_nano:nano33ble --library ../libraries/SlapCommon .
 #if __has_include("model.h")
@@ -15,24 +14,25 @@
 #define CLASSIFY slapTflmClassify
 #else
 #include <slap_classifier_heuristic.h>
-#define CLASSIFY slapHeuristicClassify<ROLE_ATTACKER>
+#define CLASSIFY slapHeuristicClassify<ROLE_DEFENDER>
 #endif
 
+// Dodges are softer than slaps: lower thresholds.
 #ifndef SLAP_ACC_TRIGGER_G
-#define SLAP_ACC_TRIGGER_G 2.5f
+#define SLAP_ACC_TRIGGER_G 1.6f
 #endif
 #ifndef SLAP_GYRO_TRIGGER_DPS
-#define SLAP_GYRO_TRIGGER_DPS 600.0f
+#define SLAP_GYRO_TRIGGER_DPS 250.0f
 #endif
 
-SlapNode node({ROLE_ATTACKER, SLAP_NAME_ATTACKER, SLAP_ACC_TRIGGER_G, SLAP_GYRO_TRIGGER_DPS,
-               /*conf_min=*/180, /*cooldown_ms=*/400},
+SlapNode node({ROLE_DEFENDER, SLAP_NAME_DEFENDER, SLAP_ACC_TRIGGER_G, SLAP_GYRO_TRIGGER_DPS,
+               /*conf_min=*/170, /*cooldown_ms=*/400},
               CLASSIFY);
 
 void setup() {
   Serial.begin(115200);
   unsigned long t = millis();
-  while (!Serial && millis() - t < 2000) {}  // don't block when running on battery
+  while (!Serial && millis() - t < 2000) {}
   if (!node.begin()) while (true) {}
 #ifdef SLAP_HAVE_MODEL
   node.reportArena(slapTflmBegin());

@@ -2,11 +2,14 @@
 
 ```bash
 pip install -r requirements.txt
-python train.py --data ../data --task attacker --window 1.0 --model cnn
-python train.py --data ../data --task defender --window 1.0 --model cnn
-python train.py --data ../data --task attacker --loso   # 留一人交叉验证（实验 4）
+python train.py --task attacker                 # 依人切分，导出 out/attacker/model.h
+python train.py --task defender
+python train.py --task attacker --loso          # 留一人交叉验证（实验 4）
+python sweep.py --task attacker                 # 窗口 / 取样率扫描（实验 2）
+
+# 还没有真实数据：
+python ../tools/synth_data.py && python train.py --task attacker --data ../data_synth
 ```
 
-输出在 `out/<task>/`：`model_fp32.tflite`、`model_int8.tflite`、`model.h`（含归一化参数与类别表）、`report.json`。
-
-也可以把 `train.py` 贴到 Colab 跑，与课件流程相同。详见 [docs/ml-pipeline.md](../docs/ml-pipeline.md)。
+`slapml.py` 是共用逻辑（读取、与固件一致的切窗、模型、TFLite 导出、model.h 生成）。
+详见 [docs/ml-pipeline.md](../docs/ml-pipeline.md)。

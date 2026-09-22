@@ -12,4 +12,6 @@
   #include <Arduino_BMI270_BMM150.h>
 #endif
 
+#ifndef SAMPLE_HZ
 #define SAMPLE_HZ 100
+#endif

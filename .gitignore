@@ -8,3 +8,4 @@ build/
 .vscode/
 *.tflite
 README.zh-TW.md
+data_synth/

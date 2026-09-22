@@ -1,5 +1,8 @@
-tensorflow>=2.15,<2.17
-numpy
+tensorflow-cpu==2.16.2
+tf_keras==2.16.0
+numpy<2
 pandas
 scikit-learn
 matplotlib
+pyserial
+bleak
