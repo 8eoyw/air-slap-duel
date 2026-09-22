@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+ml/out/
+results/raw/
+build/
+.vscode/
+*.tflite
+README.zh-TW.md
