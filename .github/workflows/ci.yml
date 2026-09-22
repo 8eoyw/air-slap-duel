@@ -50,8 +50,18 @@ jobs:
 
   referee-esp-idf:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # BLE mode is the default; the UART bridge and the servo are only
+        # compiled when selected, so build those too.
+        config: [default, uart-servo]
     steps:
       - uses: actions/checkout@v4
+      - name: select config
+        if: matrix.config == 'uart-servo'
+        run: |
+          printf 'CONFIG_SLAP_MODE_UART=y\nCONFIG_SLAP_SERVO_GPIO=4\n' \
+            >> firmware/referee_xiaozhi/standalone/sdkconfig.defaults
       - uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.4.1

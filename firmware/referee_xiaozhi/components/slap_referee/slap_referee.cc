@@ -29,7 +29,7 @@ void referee_task(void*) {
   for (;;) {
     // 10 ms tick keeps the judging resolution well under the 200 ms window edges.
     if (xQueueReceive(g_queue, &m, pdMS_TO_TICKS(10)) == pdTRUE) {
-      uint32_t now = slap_now_ms();
+      [[maybe_unused]] uint32_t now = slap_now_ms();
       switch (m.kind) {
         case SlapMsg::EVENT:
           g_fb->onEvent(m.peer == 0 ? SLAP_NAME_ATTACKER : SLAP_NAME_DEFENDER, m.event, m.rx_ms);

@@ -13,5 +13,5 @@ idf_component_register(
         "slap_servo.cc"
         "${SLAP_COMMON_DIR}/referee_core.cpp"
     INCLUDE_DIRS "include" "${SLAP_COMMON_DIR}"
-    REQUIRES bt esp_timer esp_driver_uart esp_driver_ledc json
+    REQUIRES bt esp_timer esp_driver_gpio esp_driver_uart esp_driver_ledc json
 )
