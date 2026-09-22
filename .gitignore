@@ -9,3 +9,9 @@ build/
 *.tflite
 README.zh-TW.md
 data_synth/
+sdkconfig
+sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+managed_components/
+dependencies.lock
