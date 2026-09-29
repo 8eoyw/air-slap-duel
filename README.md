@@ -112,10 +112,13 @@ pip install -r ml/requirements.txt
 python tools/collect_session.py --port COM5 --subject s01 --role attacker --reps 50
 python tools/collect_session.py --port COM5 --subject s01 --background 900
 
-# 4. 训练并烧入
-cd ml && python train.py --task attacker && cd ..
-cp ml/out/attacker/model.h firmware/nano_attacker/
-arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon -u -p COM5 firmware/nano_attacker
+# 4. 训练两个模型，烧进两块玩家板（P1、P2 各一次）
+cd ml && python train.py --task attacker && python train.py --task defender && cd ..
+cp ml/out/attacker/model.h firmware/nano_player/attacker_model.h
+cp ml/out/defender/model.h firmware/nano_player/defender_model.h
+arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon -u -p COM5 firmware/nano_player
+arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon -u -p COM6 \
+  --build-property "compiler.cpp.extra_flags=-DSLAP_PLAYER=2" firmware/nano_player
 
 # 5. 没有裁判时先用笔电看事件
 python tools/ble_monitor.py
@@ -133,9 +136,9 @@ python tools/ble_monitor.py
 | 协定、节点运行时、启发式分类 | ✅ 写好，本机编译通过（Nano 33 BLE） |
 | TFLM 分类（合成数据训练出的 model.h） | ✅ 编译通过；RAM 47%；**尚未上板实测** |
 | 裁判核心 v1（判定表、状态机、假动作惩罚） | ✅ 单元测试通过 |
-| 裁判核心 v2（格挡减半、反击、假动作追击、逾时换人、惯用手） | 🚧 实现中 |
-| `nano_player` 双模型节点、`model.h` 加命名空间 | 🚧 实现中 |
-| 训练时攻守两任务互为 background（防止闪避被认成巴掌） | 🚧 实现中 |
+| 裁判核心 v2（格挡减半、反击、假动作追击、逾时换人、惯用手） | ✅ 单元测试通过 |
+| `nano_player` 双模型节点、`model.h` 加命名空间 | ✅ 写好，CI 编译（启发式与双 TFLM 两条路径）；**尚未上板**，两个 arena 共 80 KB，RAM 余量待看 |
+| 训练时攻守两任务互为 background（防止闪避被认成巴掌） | ✅ `Config.cross_negatives`，默认开 |
 | nano_hub 备案 | ✅ 编译通过，未上板 |
 | 小智 ESP-IDF 组件 + standalone | ✅ 写好，CI 用 ESP-IDF v5.4.1 编译 |
 | xiaozhi_glue | ⚠️ 依 xiaozhi-esp32 v1.x–v2.x API 写的，需对照你们的版本 |

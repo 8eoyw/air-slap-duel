@@ -18,7 +18,7 @@
 #define SLAP_NAME_P1 "SLAP-P1"
 #define SLAP_NAME_P2 "SLAP-P2"
 
-enum SlapRole : uint8_t { ROLE_ATTACKER = 0, ROLE_DEFENDER = 1 };
+enum SlapRole : uint8_t { ROLE_ATTACKER = 0, ROLE_DEFENDER = 1, ROLE_PLAYER = 2 };
 
 // Class ids. Attacker and defender share one id space so the referee
 // never has to know which model produced an event.

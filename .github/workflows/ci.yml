@@ -22,7 +22,7 @@ jobs:
           arduino-cli lib install ArduinoBLE Arduino_BMI270_BMM150 Arduino_LSM9DS1 Chirale_TensorFLowLite
       - name: compile sketches (heuristic classifier)
         run: |
-          for s in imu_collect nano_attacker nano_defender nano_hub; do
+          for s in imu_collect nano_attacker nano_defender nano_player nano_hub; do
             arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon firmware/$s
           done
 
@@ -39,6 +39,7 @@ jobs:
         run: |
           python tools/synth_data.py --subjects 4 --takes 20
           cd ml && python train.py --task attacker --data ../data_synth --epochs 10
+          python train.py --task defender --data ../data_synth --epochs 10
       - uses: arduino/setup-arduino-cli@v2
       - name: compile attacker with the trained model (TFLite Micro path)
         run: |
@@ -47,6 +48,12 @@ jobs:
           arduino-cli lib install ArduinoBLE Arduino_BMI270_BMM150 Arduino_LSM9DS1 Chirale_TensorFLowLite
           cp ml/out/attacker/model.h firmware/nano_attacker/
           arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon firmware/nano_attacker
+      - name: compile the player board with both models
+        run: |
+          cp ml/out/attacker/model.h firmware/nano_player/attacker_model.h
+          cp ml/out/defender/model.h firmware/nano_player/defender_model.h
+          arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/SlapCommon \
+            --build-property "compiler.cpp.extra_flags=-DSLAP_PLAYER=2" firmware/nano_player
 
   referee-esp-idf:
     runs-on: ubuntu-latest

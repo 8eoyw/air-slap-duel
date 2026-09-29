@@ -14,6 +14,10 @@ python tools/collect_session.py --port COM5 --subject s01 --background 900
 - 4 人以上，每类 50–100 次；类别顺序会被打乱，避免疲劳与标签相关。
 - 每人 15 分钟 `background`：拨头发、挥手、推眼镜、走路、拿水杯。**没有这类，demo 时观众一动就误触。**
 - 攻击和防守的 background 共用同一份录音（放在 `background/`，两个任务都会读）。
+- **玩家板要绑在出手那只手的手背，攻击和防守动作都用同一个位置录**（旧设计的防守板在头带或手腕，数据不能混用）。
+- **交叉负样本**（`Config.cross_negatives`，默认开）：攻击模型把 `dodge_*`/`block` 的录音当 background，
+  防守模型把 `forehand`/`backhand`/`feint` 当 background。玩家板每个动作两个模型都会跑，
+  不这样训练，一个大幅度闪避可能被攻击模型认成巴掌，被裁判当成反击。
 - 存放：`data/<受试者代号>/<类别>/<时间戳>.csv`，字段 `t_ms,ax,ay,az,gx,gy,gz`。
 
 ## 切窗：与固件一致
@@ -23,7 +27,8 @@ python tools/collect_session.py --port COM5 --subject s01 --background 900
 
 - 动作 take：取第一个触发点的窗口；一直没越过阈值的 take 会被跳过并显示警告（代表阈值太高或动作太轻）。
 - background take：每个会触发的点都取一个窗口，也就是只学「真的会送进模型」的那些乱动。
-- 阈值、窗口、取样率都写进 `model.h`，固件直接采用，训练和上板不会不一致。
+- 阈值、窗口、取样率、冷却时间都写进 `model.h`（`namespace slap_model_<task>`），固件直接采用，训练和上板不会不一致。
+  玩家板的两条管线各自用自己模型的阈值与窗口，共用一个环形缓冲区。
 
 ## 前处理与增强
 

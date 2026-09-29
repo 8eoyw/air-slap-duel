@@ -10,10 +10,12 @@ Nano 是 peripheral，裁判（小智或 nano_hub）是 central。定义在
 | Service | `5a1a0000-8c3b-4f7e-9d2a-000000000001` | — | Air Slap 服务 |
 | Event | `5a1a0001-…-000000000001` | Notify | 事件封包 |
 | Sync | `5a1a0002-…-000000000001` | Write / Write w/o response | 裁判时间 beacon |
-| Role | `5a1a0003-…-000000000001` | Read | 0 = 攻击者，1 = 防守者 |
+| Role | `5a1a0003-…-000000000001` | Read | 0 = 攻击者，1 = 防守者，2 = 玩家板（攻防两个模型） |
 | Raw | `5a1a0004-…-000000000001` | Notify | 只在 `-DSLAP_STREAM_RAW` 编译时发送（实验 3） |
 
-广播名称：`SLAP-ATK` / `SLAP-DEF`。ArduinoBLE 把名称放在 scan response 里，central 要用主动扫描。
+广播名称：玩家板 `SLAP-P1` / `SLAP-P2`（`nano_player`），单角色板 `SLAP-ATK` / `SLAP-DEF`。
+裁判的槽位 0 接 `SLAP-P1` 或 `SLAP-ATK`，槽位 1 接 `SLAP-P2` 或 `SLAP-DEF`；连上玩家板时事件按玩家编号路由、跳过交换装备。
+ArduinoBLE 把名称放在 scan response 里，central 要用主动扫描。
 连线间隔请求 7.5–15 ms。
 
 ## 事件封包（8 bytes，little-endian）
@@ -43,22 +45,28 @@ Nano 是 peripheral，裁判（小智或 nano_hub）是 central。定义在
 
 ```
 INFO,<key>=<value>                       启动信息、arena_used、连线/断线
-TRIG,<t_local_ms>                        越过阈值
-EVT,<t_local>,<t_ref>,<cls>,<conf>,<peak>,<infer_us>   已送出的事件
-REJ,<t_local>,<cls>,<conf>,<infer_us>    推论为 background 或信心度不足，未送出
+TRIG,<t_local_ms>[,<tag>]                越过阈值
+EVT,<t_local>,<t_ref>,<cls>,<conf>,<peak>,<infer_us>[,<tag>]   已送出的事件
+REJ,<t_local>,<cls>,<conf>,<infer_us>[,<tag>]    推论为 background 或信心度不足，未送出
 SYNC,<offset>,<median_offset>
 ```
+
+`<tag>` 只有玩家板会印（`atk` / `def`，哪条管线），放在最后一栏，旧的解析器照样能读。
 
 ## 裁判 JSON 输出（nano_hub 与 standalone 相同，`tools/dashboard.py` 解析）
 
 ```json
 {"type":"announce","attacker":0,"round":1}
 {"type":"event","from":"SLAP-ATK","cls":"forehand","t":1000,"rx":1540,"conf":240,"peak":850}
-{"type":"result","outcome":"HIT","strength":"heavy","attack":"forehand","defense":"background","delta_ms":0,"damage":30,"attacker":0,"hp":[100,70]}
+{"type":"result","outcome":"HIT","strength":"heavy","attack":"forehand","defense":"background","delta_ms":0,"damage":30,"counter_damage":0,"attacker":0,"hp":[100,70]}
 {"type":"swap","attacker":1}
 {"type":"game_over","winner":0,"hp":[40,0]}
 {"type":"peer","name":"SLAP-DEF","connected":true}
 {"type":"state","state":"ARMED"}
 ```
 
-指令（一行一个）：`start`、`announce_done`、`swap_done`、`reset`。
+`outcome`：`HIT`、`JUMPED`、`GRAZE`、`MISS`、`FEINT_FOOLED`、`BLOCKED`、`COUNTERED`、`FEINT_PUNISHED`、`TIMEOUT`
+（`FEINT_HELD` 保留名称但 v2 起不再出现）。`damage` 扣防守方，`counter_damage` 扣攻击方。
+
+指令（一行一个）：`start`、`announce_done`、`swap_done`、`reset`，
+惯用手 `left1`、`right1`、`left2`、`right2`（默认右手）。

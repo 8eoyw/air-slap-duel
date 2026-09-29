@@ -4,12 +4,17 @@
 //   slap_classifier_tflm.h       (trained model.h present)
 //   slap_classifier_heuristic.h  (no model yet: sign-of-axis rules, for integration tests)
 //
+// One node can run several trigger pipelines over the same IMU ring buffer
+// (firmware/nano_player: attacker model + defender model). Each pipeline keeps
+// the trigger thresholds, window and cooldown its model was trained with.
+//
 // Serial log lines (parsed by tools/analyze_log.py):
 //   INFO,<key>=<value>...
-//   TRIG,<t_local_ms>
-//   EVT,<t_local_ms>,<t_ref_ms>,<cls>,<conf>,<peak_dps>,<infer_us>
-//   REJ,<t_local_ms>,<cls>,<conf>,<infer_us>          (background or low confidence)
+//   TRIG,<t_local_ms>[,<tag>]
+//   EVT,<t_local_ms>,<t_ref_ms>,<cls>,<conf>,<peak_dps>,<infer_us>[,<tag>]
+//   REJ,<t_local_ms>,<cls>,<conf>,<infer_us>[,<tag>]   (background or low confidence)
 //   SYNC,<offset_ms>,<median_offset_ms>
+// <tag> (pipeline name) is only printed when the node runs more than one pipeline.
 #pragma once
 #include <Arduino.h>
 #include <ArduinoBLE.h>
@@ -22,11 +27,16 @@
 #ifndef SLAP_PRE
 #define SLAP_PRE (SLAP_WINDOW / 2)  // samples kept before the trigger
 #endif
+#ifndef SLAP_RING
+#define SLAP_RING SLAP_WINDOW    // ring length: the longest window of any pipeline
+#endif
+#define SLAP_MAX_PIPELINES 2
 
-// Classifier contract: `win` is SLAP_WINDOW x 6 floats, oldest first,
+// Classifier contract: `win` is <pipeline window> x 6 floats, oldest first,
 // channels ax,ay,az (g), gx,gy,gz (dps). Returns SlapClass id and confidence 0..255.
 typedef void (*SlapClassifyFn)(const float* win, uint8_t* cls, uint8_t* conf);
 
+// Single-pipeline node (nano_attacker / nano_defender): window SLAP_WINDOW, pre SLAP_PRE.
 struct SlapNodeConfig {
   SlapRole    role;
   const char* name;
@@ -36,16 +46,37 @@ struct SlapNodeConfig {
   uint16_t    cooldown_ms;       // after a trigger, ignore new triggers this long
 };
 
+struct SlapPipelineConfig {
+  const char*    tag;               // log tag, e.g. "atk" / "def"
+  SlapClassifyFn classify;
+  int            window;            // samples, <= SLAP_RING
+  int            pre;               // samples kept before the trigger
+  float          acc_trigger_g;
+  float          gyro_trigger_dps;
+  uint8_t        conf_min;
+  uint16_t       cooldown_ms;
+};
+
 class SlapNode {
  public:
   SlapNode(const SlapNodeConfig& cfg, SlapClassifyFn fn)
-      : cfg_(cfg), classify_(fn),
+      : SlapNode(cfg.role, cfg.name, nullptr, 0) {
+    SlapPipelineConfig p = {"", fn, SLAP_WINDOW, SLAP_PRE, cfg.acc_trigger_g,
+                            cfg.gyro_trigger_dps, cfg.conf_min, cfg.cooldown_ms};
+    pipes_[0].cfg = p;
+    nPipes_ = 1;
+  }
+
+  SlapNode(SlapRole role, const char* name, const SlapPipelineConfig* pipes, int n)
+      : role_(role), name_(name),
         service_(SLAP_SERVICE_UUID),
         eventChar_(SLAP_EVENT_UUID, BLENotify, sizeof(SlapEvent)),
         syncChar_(SLAP_SYNC_UUID, BLEWriteWithoutResponse | BLEWrite, sizeof(SlapSync)),
         roleChar_(SLAP_ROLE_UUID, BLERead),
         rawChar_(SLAP_RAW_UUID, BLENotify, sizeof(SlapRawSample)) {
     self_ = this;
+    nPipes_ = n < SLAP_MAX_PIPELINES ? n : SLAP_MAX_PIPELINES;
+    for (int i = 0; i < nPipes_; i++) pipes_[i].cfg = pipes[i];
   }
 
   bool begin() {
@@ -57,15 +88,21 @@ class SlapNode {
     if (!IMU.begin()) { Serial.println("INFO,error=imu_init"); return false; }
     if (!BLE.begin()) { Serial.println("INFO,error=ble_init"); return false; }
 
-    BLE.setLocalName(cfg_.name);
-    BLE.setDeviceName(cfg_.name);
+    for (int i = 0; i < nPipes_; i++) {
+      if (pipes_[i].cfg.window > RING || pipes_[i].cfg.pre >= pipes_[i].cfg.window) {
+        Serial.println("INFO,error=window_exceeds_ring");
+        return false;
+      }
+    }
+    BLE.setLocalName(name_);
+    BLE.setDeviceName(name_);
     BLE.setAdvertisedService(service_);
     service_.addCharacteristic(eventChar_);
     service_.addCharacteristic(syncChar_);
     service_.addCharacteristic(roleChar_);
     service_.addCharacteristic(rawChar_);
     BLE.addService(service_);
-    roleChar_.writeValue((uint8_t)cfg_.role);
+    roleChar_.writeValue((uint8_t)role_);
     syncChar_.setEventHandler(BLEWritten, onSyncThunk);
     BLE.setEventHandler(BLEConnected, onConnThunk);
     BLE.setEventHandler(BLEDisconnected, onDiscThunk);
@@ -73,9 +110,10 @@ class SlapNode {
     BLE.setConnectionInterval(6, 12);
     BLE.advertise();
 
-    Serial.print("INFO,name="); Serial.print(cfg_.name);
-    Serial.print(",role="); Serial.print(cfg_.role);
-    Serial.print(",window="); Serial.print(SLAP_WINDOW);
+    Serial.print("INFO,name="); Serial.print(name_);
+    Serial.print(",role="); Serial.print(role_);
+    Serial.print(",window="); Serial.print(pipes_[0].cfg.window);
+    for (int i = 1; i < nPipes_; i++) { Serial.print('/'); Serial.print(pipes_[i].cfg.window); }
     Serial.print(",hz="); Serial.println(SAMPLE_HZ);
     nextUs_ = micros();
     return true;
@@ -103,26 +141,40 @@ class SlapNode {
 #endif
 
     uint32_t ms = millis();
-    if (!collecting_) {
-      float a = sqrtf(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
-      float g = sqrtf(s[3] * s[3] + s[4] * s[4] + s[5] * s[5]);
-      bool cool = (uint32_t)(ms - lastTrig_) < cfg_.cooldown_ms;
-      if (!cool && (a > cfg_.acc_trigger_g || g > cfg_.gyro_trigger_dps)) {
-        collecting_ = true;
-        remaining_ = SLAP_WINDOW - SLAP_PRE;
-        lastTrig_ = ms;
-        onset_ = ms;
-        Serial.print("TRIG,"); Serial.println(ms);
+    float a = sqrtf(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+    float g = sqrtf(s[3] * s[3] + s[4] * s[4] + s[5] * s[5]);
+    for (int i = 0; i < nPipes_; i++) {
+      Pipe& p = pipes_[i];
+      if (!p.collecting) {
+        bool cool = (uint32_t)(ms - p.lastTrig) < p.cfg.cooldown_ms;
+        if (!cool && (a > p.cfg.acc_trigger_g || g > p.cfg.gyro_trigger_dps)) {
+          p.collecting = true;
+          p.remaining = p.cfg.window - p.cfg.pre;
+          p.lastTrig = ms;
+          p.onset = ms;
+          Serial.print("TRIG,"); Serial.print(ms); printTag(p); Serial.println();
+        }
       }
-    }
-    if (collecting_ && --remaining_ <= 0) {
-      collecting_ = false;
-      infer();
+      if (p.collecting && --p.remaining <= 0) {
+        p.collecting = false;
+        infer(p);
+      }
     }
   }
 
  private:
-  static constexpr int RING = SLAP_WINDOW;
+  static constexpr int RING = SLAP_RING;
+
+  struct Pipe {
+    SlapPipelineConfig cfg;
+    bool collecting = false;
+    int remaining = 0;
+    uint32_t lastTrig = 0, onset = 0;
+  };
+
+  void printTag(const Pipe& p) {
+    if (nPipes_ > 1) { Serial.print(','); Serial.print(p.cfg.tag); }
+  }
 
   bool readImu(float* s) {
     if (!IMU.accelerationAvailable() || !IMU.gyroscopeAvailable()) {
@@ -142,29 +194,30 @@ class SlapNode {
     if (count_ < RING) count_++;
   }
 
-  void infer() {
-    if (count_ < RING) return;
-    static float win[SLAP_WINDOW * 6];
+  void infer(Pipe& p) {
+    const int w = p.cfg.window;
+    if (count_ < w) return;
+    static float win[RING * 6];
     uint16_t peak = 0;
-    for (int i = 0; i < RING; i++) {
-      const float* s = ring_[(head_ + i) % RING];
+    for (int i = 0; i < w; i++) {  // the last w samples, oldest first
+      const float* s = ring_[(head_ + RING - w + i) % RING];
       memcpy(&win[i * 6], s, sizeof(float) * 6);
       float g = sqrtf(s[3] * s[3] + s[4] * s[4] + s[5] * s[5]);
       if (g > peak) peak = (uint16_t)min(g, 65535.0f);
     }
     uint8_t cls = CLS_BACKGROUND, conf = 0;
     unsigned long t0 = micros();
-    classify_(win, &cls, &conf);
+    p.cfg.classify(win, &cls, &conf);
     unsigned long us = micros() - t0;
 
-    if (cls == CLS_BACKGROUND || conf < cfg_.conf_min) {
-      Serial.print("REJ,"); Serial.print(onset_); Serial.print(',');
+    if (cls == CLS_BACKGROUND || conf < p.cfg.conf_min) {
+      Serial.print("REJ,"); Serial.print(p.onset); Serial.print(',');
       Serial.print(cls); Serial.print(','); Serial.print(conf); Serial.print(',');
-      Serial.println(us);
+      Serial.print(us); printTag(p); Serial.println();
       return;
     }
     SlapEvent e;
-    e.t_onset = onset_ + medianOffset();
+    e.t_onset = p.onset + medianOffset();
     e.cls = cls;
     e.conf = conf;
     e.peak = peak;
@@ -172,10 +225,10 @@ class SlapNode {
     digitalWrite(LED_BUILTIN, HIGH);
     ledOffAt_ = millis() + 150;
 
-    Serial.print("EVT,"); Serial.print(onset_); Serial.print(',');
+    Serial.print("EVT,"); Serial.print(p.onset); Serial.print(',');
     Serial.print(e.t_onset); Serial.print(','); Serial.print(slapClassName(cls));
     Serial.print(','); Serial.print(conf); Serial.print(','); Serial.print(peak);
-    Serial.print(','); Serial.println(us);
+    Serial.print(','); Serial.print(us); printTag(p); Serial.println();
   }
 
   void streamRaw(const float* s) {
@@ -242,8 +295,10 @@ class SlapNode {
   }
 
  private:
-  SlapNodeConfig cfg_;
-  SlapClassifyFn classify_;
+  SlapRole role_;
+  const char* name_;
+  Pipe pipes_[SLAP_MAX_PIPELINES];
+  int nPipes_ = 0;
   BLEService service_;
   BLECharacteristic eventChar_, syncChar_;
   BLEByteCharacteristic roleChar_;
@@ -251,9 +306,7 @@ class SlapNode {
 
   float ring_[RING][6];
   int head_ = 0, count_ = 0;
-  bool collecting_ = false;
-  int remaining_ = 0;
-  uint32_t lastTrig_ = 0, onset_ = 0, ledOffAt_ = 0;
+  uint32_t ledOffAt_ = 0;
   unsigned long nextUs_ = 0;
   uint16_t rawSeq_ = 0;
 
