@@ -137,7 +137,7 @@ python tools/ble_monitor.py
 | TFLM 分类（合成数据训练出的 model.h） | ✅ 编译通过；RAM 47%；**尚未上板实测** |
 | 裁判核心 v1（判定表、状态机、假动作惩罚） | ✅ 单元测试通过 |
 | 裁判核心 v2（格挡减半、反击、假动作追击、逾时换人、惯用手） | ✅ 单元测试通过 |
-| `nano_player` 双模型节点、`model.h` 加命名空间 | ✅ 写好，CI 编译（启发式与双 TFLM 两条路径）；**尚未上板**，两个 arena 共 80 KB，RAM 余量待看 |
+| `nano_player` 双模型节点、`model.h` 加命名空间 | ✅ 写好，CI 编译（启发式与双 TFLM 两条路径）；**尚未上板**，双模型 RAM 62%（单模型 47%）、flash 65% |
 | 训练时攻守两任务互为 background（防止闪避被认成巴掌） | ✅ `Config.cross_negatives`，默认开 |
 | nano_hub 备案 | ✅ 编译通过，未上板 |
 | 小智 ESP-IDF 组件 + standalone | ✅ 写好，CI 用 ESP-IDF v5.4.1 编译 |
