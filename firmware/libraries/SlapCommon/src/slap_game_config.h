@@ -29,10 +29,10 @@
 #define ANNOUNCE_TIMEOUT_MS   2500  // used when the platform has no TTS-done signal
 #endif
 #ifndef ATTACK_TIMEOUT_MS
-#define ATTACK_TIMEOUT_MS     5000  // re-announce if no attack arrives
+#define ATTACK_TIMEOUT_MS     5000  // attack phase length; no real slap by then -> turn passes
 #endif
 #ifndef SWAP_TIMEOUT_MS
-#define SWAP_TIMEOUT_MS       8000  // time for the players to swap devices
+#define SWAP_TIMEOUT_MS       8000  // time for the players to swap devices (role boards only)
 #endif
 #ifndef RESOLVE_SHOW_MS
 #define RESOLVE_SHOW_MS       1500  // how long the hit/miss feedback stays up
@@ -49,9 +49,34 @@
 #define DMG_MEDIUM            20
 #define DMG_HEAVY             30
 
+// Block: always stops a slap, but only halves it and never opens a counter.
+// Only a dodge in the right direction avoids all damage and earns a counter.
+#define BLOCK_DAMAGE_NUM      1
+#define BLOCK_DAMAGE_DEN      2
+
+// Counter: after a clean dodge the defender may slap back.
+#ifndef COUNTER_MIN_GAP_MS
+#define COUNTER_MIN_GAP_MS    150   // counter onset must come this long after the dodge onset
+#endif
+#ifndef COUNTER_WINDOW_MS
+#define COUNTER_WINDOW_MS     800   // ... and no later than this
+#endif
+#define COUNTER_MULT_NUM      3     // counter damage = tier damage x 3/2
+#define COUNTER_MULT_DEN      2
+#define COUNTER_FEEBLE_MULT   2     // x2 instead when the dodged slap was light ("feeble slap opens a counter")
+
+// Feint follow-up: if the defender bites on a feint, a real slap that starts
+// after the defender's reaction (and within this window) can't be dodged and crits.
+#ifndef FOLLOWUP_WINDOW_MS
+#define FOLLOWUP_WINDOW_MS    1000
+#endif
+#define CRIT_MULT_NUM         3
+#define CRIT_MULT_DEN         2
+
 #define SYNC_PERIOD_MS        1000
 
-// Which dodge escapes which attack. Depends on how the players stand;
-// flip if forehand is swung from the attacker's right.
+// Which dodge escapes which attack for a right-handed attacker (a forehand
+// swung from the attacker's right). Left-handed attackers are mirrored at
+// runtime: RefereeCore::setLeftHanded().
 #define DODGE_FOR_FOREHAND    CLS_DODGE_RIGHT
 #define DODGE_FOR_BACKHAND    CLS_DODGE_LEFT

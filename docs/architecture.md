@@ -11,28 +11,29 @@
 ## 回合状态机（裁判端）
 
 ```
-IDLE ──语音「开始」──→ ANNOUNCE ──旁白结束──→ ARMED
-ARMED ──攻击事件(class≠background)──→ JUDGING（开防守时间窗）
-ARMED ──逾时 5 s──→ ANNOUNCE（重新宣布）
-JUDGING ──防守事件 或 窗口结束──→ RESOLVE
-RESOLVE ──扣血、表情、舵机、旁白──→ SWAP（攻守互换）
-SWAP ──任一方 HP ≤ 0──→ GAME_OVER ──语音「再来一局」──→ IDLE
-SWAP ──否则──→ ANNOUNCE
+IDLE ──语音「开始」──→ ANNOUNCE ──旁白结束──→ ARMED（攻击阶段 5 s 开始计时）
+ARMED ──攻击事件 forehand/backhand/feint──→ JUDGING（开防守时间窗）
+ARMED ──攻击阶段逾时──→ RESOLVE（TIMEOUT，0 伤害）
+JUDGING ──feint 且防守方没动──→ ARMED（时限照算）
+JUDGING ──闪对方向──→ 等反击窗口（闪避起点 +150–800 ms）──→ RESOLVE
+JUDGING ──防守方咬了 feint──→ 等追击窗口（防守起点 +1 s）──→ RESOLVE
+JUDGING ──其他防守事件 或 窗口结束──→ RESOLVE
+RESOLVE ──扣血（含反击伤害）、表情、舵机、旁白──→ 换攻守
+  玩家板（SLAP-P1/P2）：直接 ANNOUNCE
+  单角色板（SLAP-ATK/DEF）：SWAP 等玩家交换装备 ──→ ANNOUNCE
+任一方 HP ≤ 0 ──→ GAME_OVER ──语音「再来一局」──→ IDLE
 ```
 
-## 判定规则（初版，可调）
+## 判定规则
 
-令 `Δ = t_defend − t_attack`（皆为对时后的时间）。
+完整规则表见 [README 的「游戏规则」](../README.md#游戏规则)，参数集中在
+`firmware/libraries/SlapCommon/src/slap_game_config.h`（可用 -D 覆盖）。
 
-| 条件 | 结果 | 伤害 |
-|---|---|---|
-| 攻击为 `feint`，防守有动作 | 防守方被骗，下回合防守窗口缩短 | 0 |
-| 无防守事件，或 `Δ > 600 ms` | 命中 HIT | 轻 10 / 中 20 / 重 30 |
-| `200 ms ≤ Δ ≤ 600 ms` 且方向正确（正手→右闪、反手→左闪）或 `block` | 闪开 MISS | 0 |
-| `Δ < 200 ms` | 抢跑，视为命中 | 同 HIT |
-| 方向错误 | 擦过 GRAZE | HIT 的一半 |
+## 事件路由
 
-参数集中放在 `firmware/libraries/SlapCommon/src/slap_game_config.h`（可用 -D 覆盖）。
+- 玩家板：BLE 槽位 = 玩家编号。事件来自当前攻击方 → 走攻击路径（只收巴掌 / 假动作 / 追击）；
+  来自防守方 → 走防守路径（闪避、格挡，闪开后再收一记巴掌当反击）。
+- 单角色板：槽位 0 永远是攻击装备、槽位 1 是防守装备，玩家每回合交换。
 
 ## 数据流与带宽
 
