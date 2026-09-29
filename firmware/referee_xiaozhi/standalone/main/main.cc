@@ -1,7 +1,7 @@
 // Standalone referee: prints the same JSON lines as firmware/nano_hub on the
 // console, so tools/dashboard.py works with either. Control:
 //   BOOT button (GPIO0) -> start / rematch
-//   console lines: start | announce_done | swap_done | reset
+//   console lines: start | announce_done | swap_done | reset | left1 | right1 | left2 | right2
 #include <stdio.h>
 #include <string.h>
 
@@ -23,10 +23,12 @@ class JsonFeedback : public SlapFeedback {
   void onResult(const RoundResult& r) override {
     static const char* str[] = {"light", "medium", "heavy"};
     printf("{\"type\":\"result\",\"outcome\":\"%s\",\"strength\":\"%s\",\"attack\":\"%s\","
-           "\"defense\":\"%s\",\"delta_ms\":%ld,\"damage\":%u,\"attacker\":%u,\"hp\":[%d,%d]}\n",
+           "\"defense\":\"%s\",\"delta_ms\":%ld,\"damage\":%u,\"counter_damage\":%u,"
+           "\"attacker\":%u,\"hp\":[%d,%d]}\n",
            refOutcomeName(r.outcome), str[r.strength], slapClassName(r.attack_cls),
-           slapClassName(r.defense_cls), (long)r.delta_ms, r.damage, r.attacker, r.hp[0], r.hp[1]);
-    if (r.damage) slap_servo_hit(r.strength);
+           slapClassName(r.defense_cls), (long)r.delta_ms, r.damage, r.counter_damage, r.attacker,
+           r.hp[0], r.hp[1]);
+    if (r.damage || r.counter_damage) slap_servo_hit(r.strength);
   }
   void onSwap(uint8_t next) override { printf("{\"type\":\"swap\",\"attacker\":%u}\n", next); }
   void onGameOver(uint8_t winner, const int16_t hp[2]) override {
@@ -55,6 +57,10 @@ void console_task(void*) {
     else if (!strcmp(line, "announce_done")) slap_referee_command(SLAP_CMD_ANNOUNCE_DONE);
     else if (!strcmp(line, "swap_done")) slap_referee_command(SLAP_CMD_SWAP_DONE);
     else if (!strcmp(line, "reset")) slap_referee_command(SLAP_CMD_RESET);
+    else if (!strcmp(line, "left1")) slap_referee_command(SLAP_CMD_LEFT_P1);
+    else if (!strcmp(line, "right1")) slap_referee_command(SLAP_CMD_RIGHT_P1);
+    else if (!strcmp(line, "left2")) slap_referee_command(SLAP_CMD_LEFT_P2);
+    else if (!strcmp(line, "right2")) slap_referee_command(SLAP_CMD_RIGHT_P2);
   }
 }
 

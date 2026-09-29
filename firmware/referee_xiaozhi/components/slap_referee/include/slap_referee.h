@@ -13,6 +13,8 @@ enum SlapCommand : uint8_t {
   SLAP_CMD_ANNOUNCE_DONE,  // TTS finished (optional, otherwise timeout)
   SLAP_CMD_SWAP_DONE,      // players swapped devices (optional, otherwise timeout)
   SLAP_CMD_RESET,
+  // Handedness (mirrors forehand/backhand -> dodge when that player attacks).
+  SLAP_CMD_LEFT_P1, SLAP_CMD_RIGHT_P1, SLAP_CMD_LEFT_P2, SLAP_CMD_RIGHT_P2,
 };
 
 // Implement this on the platform (LCD face, sound, servo, LLM taunt ...).

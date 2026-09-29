@@ -10,8 +10,13 @@
 #define SLAP_ROLE_UUID    "5a1a0003-8c3b-4f7e-9d2a-000000000001"  // read
 #define SLAP_RAW_UUID     "5a1a0004-8c3b-4f7e-9d2a-000000000001"  // notify, experiment 3 only
 
+// Role boards (players swap them every round; no counters).
 #define SLAP_NAME_ATTACKER "SLAP-ATK"
 #define SLAP_NAME_DEFENDER "SLAP-DEF"
+// Player boards (firmware/nano_player): one per player, both models on board.
+// Central slot 0 takes SLAP-P1 or SLAP-ATK, slot 1 takes SLAP-P2 or SLAP-DEF.
+#define SLAP_NAME_P1 "SLAP-P1"
+#define SLAP_NAME_P2 "SLAP-P2"
 
 enum SlapRole : uint8_t { ROLE_ATTACKER = 0, ROLE_DEFENDER = 1 };
 

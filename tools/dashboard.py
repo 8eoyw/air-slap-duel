@@ -16,7 +16,8 @@ import time
 from pathlib import Path
 
 ZH = {"HIT": "命中", "JUMPED": "抢跑", "GRAZE": "擦过", "MISS": "闪开",
-      "FEINT_FOOLED": "被假动作骗了", "FEINT_HELD": "没上当"}
+      "FEINT_FOOLED": "被假动作骗了", "FEINT_HELD": "没上当", "BLOCKED": "格挡",
+      "COUNTERED": "反击", "FEINT_PUNISHED": "假动作暴击", "TIMEOUT": "时间到"}
 
 
 class Board:
@@ -57,8 +58,9 @@ class Board:
         out.append("")
         for r in self.history[-6:]:
             if "attack" in r:
+                counter = f" 反击-{r['counter_damage']}" if r.get("counter_damage") else ""
                 out.append(f"  {r['attack']:9s} vs {r['defense']:11s} Δ={r['delta_ms']:5d}ms  "
-                           f"{ZH.get(r['outcome'], r['outcome'])} -{r['damage']} ({r['strength']})")
+                           f"{ZH.get(r['outcome'], r['outcome'])} -{r['damage']} ({r['strength']}){counter}")
             else:
                 out.append(f"  {r['outcome']}")
         out.append("")

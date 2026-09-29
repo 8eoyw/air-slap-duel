@@ -18,6 +18,12 @@ namespace {
 
 QueueHandle_t g_queue;
 SlapFeedback* g_fb;
+bool g_player_board[2];  // per slot, from the last PEER message
+
+const char* slot_name(uint8_t slot) {
+  if (g_player_board[slot & 1]) return slot ? SLAP_NAME_P2 : SLAP_NAME_P1;
+  return slot ? SLAP_NAME_DEFENDER : SLAP_NAME_ATTACKER;
+}
 
 #if CONFIG_SLAP_MODE_BLE
 RefereeCore* g_core;
@@ -32,14 +38,19 @@ void referee_task(void*) {
       [[maybe_unused]] uint32_t now = slap_now_ms();
       switch (m.kind) {
         case SlapMsg::EVENT:
-          g_fb->onEvent(m.peer == 0 ? SLAP_NAME_ATTACKER : SLAP_NAME_DEFENDER, m.event, m.rx_ms);
+          g_fb->onEvent(slot_name(m.peer), m.event, m.rx_ms);
 #if CONFIG_SLAP_MODE_BLE
-          if (m.peer == 0) g_core->onAttackerEvent(m.event, now);
-          else             g_core->onDefenderEvent(m.event, now);
+          if (g_player_board[m.peer & 1]) g_core->onPlayerEvent(m.peer, m.event, now);
+          else if (m.peer == 0)           g_core->onAttackerEvent(m.event, now);
+          else                            g_core->onDefenderEvent(m.event, now);
 #endif
           break;
         case SlapMsg::PEER:
-          g_fb->onPeer(m.peer == 0 ? SLAP_NAME_ATTACKER : SLAP_NAME_DEFENDER, m.connected);
+          g_player_board[m.peer & 1] = m.player_board;
+#if CONFIG_SLAP_MODE_BLE
+          if (m.connected) g_core->setPlayerBoards(m.player_board);
+#endif
+          g_fb->onPeer(slot_name(m.peer), m.connected);
           break;
         case SlapMsg::COMMAND:
 #if CONFIG_SLAP_MODE_BLE
@@ -48,6 +59,10 @@ void referee_task(void*) {
             case SLAP_CMD_ANNOUNCE_DONE: g_core->announceDone(now); break;
             case SLAP_CMD_SWAP_DONE:     g_core->swapDone(now); break;
             case SLAP_CMD_RESET:         g_core->reset(); break;
+            case SLAP_CMD_LEFT_P1:       g_core->setLeftHanded(0, true); break;
+            case SLAP_CMD_RIGHT_P1:      g_core->setLeftHanded(0, false); break;
+            case SLAP_CMD_LEFT_P2:       g_core->setLeftHanded(1, true); break;
+            case SLAP_CMD_RIGHT_P2:      g_core->setLeftHanded(1, false); break;
           }
 #else
           slap_uart_send_command(m.cmd);

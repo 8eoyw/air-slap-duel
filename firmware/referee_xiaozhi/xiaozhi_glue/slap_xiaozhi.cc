@@ -16,7 +16,10 @@
 
 namespace {
 
-const char* kOutcomeZh[] = {"命中！", "抢跑，算你挨打", "擦过", "闪开了", "被假动作骗了", "定力不错"};
+// Indexed by RefOutcome.
+const char* kOutcomeZh[] = {"命中！", "抢跑，算你挨打", "擦过", "闪开了", "被假动作骗了", "定力不错",
+                            "挡住了，还是疼", "闪开还打回去！", "上当了，吃暴击！", "时间到，换人"};
+static_assert(sizeof(kOutcomeZh) / sizeof(kOutcomeZh[0]) == OUT_COUNT_, "one line per outcome");
 const char* kStrengthZh[] = {"轻", "中", "重"};
 
 class XiaozhiFeedback : public SlapFeedback {
@@ -28,10 +31,12 @@ class XiaozhiFeedback : public SlapFeedback {
   void onResult(const RoundResult& r) override {
     std::string msg = std::string(kOutcomeZh[r.outcome]);
     if (r.damage) msg += " " + std::string(kStrengthZh[r.strength]) + "击 -" + std::to_string(r.damage);
+    if (r.counter_damage) msg += " 反击 -" + std::to_string(r.counter_damage);
     msg += "  HP " + std::to_string(r.hp[0]) + " : " + std::to_string(r.hp[1]);
-    const char* face = r.damage >= DMG_HEAVY ? "crying" : r.damage ? "sad" : r.outcome == OUT_MISS ? "cool" : "surprised";
+    uint8_t hurt = r.damage > r.counter_damage ? r.damage : r.counter_damage;
+    const char* face = hurt >= DMG_HEAVY ? "crying" : hurt ? "sad" : r.outcome == OUT_MISS ? "cool" : "surprised";
     Say(face, msg);
-    if (r.damage) slap_servo_hit(r.strength);
+    if (hurt) slap_servo_hit(r.strength);
 
 #if CONFIG_SLAP_LLM_TAUNT
     // Online bonus: let the cloud LLM improvise one line of trash talk.
@@ -46,7 +51,7 @@ class XiaozhiFeedback : public SlapFeedback {
   }
 
   void onSwap(uint8_t next) override {
-    Say("neutral", "攻守交换，请交换装备。玩家" + std::to_string(next + 1) + "准备出招");
+    Say("neutral", "攻守交换，玩家" + std::to_string(next + 1) + "准备出招");
   }
 
   void onGameOver(uint8_t winner, const int16_t hp[2]) override {
@@ -86,6 +91,16 @@ void SlapXiaozhiInit() {
   mcp.AddTool("self.slap_duel.swap_done", "玩家已经交换好装备，继续下一回合", PropertyList(),
               [](const PropertyList&) -> ReturnValue {
                 slap_referee_command(SLAP_CMD_SWAP_DONE);
+                return true;
+              });
+  mcp.AddTool("self.slap_duel.set_hand", "设定玩家的惯用手（左撇子要设，否则正反手方向会判反）",
+              PropertyList({Property("player", kPropertyTypeInteger, 1, 1, 2),
+                            Property("left_handed", kPropertyTypeBoolean)}),
+              [](const PropertyList& props) -> ReturnValue {
+                int p = props["player"].value<int>();
+                bool left = props["left_handed"].value<bool>();
+                slap_referee_command(p == 1 ? (left ? SLAP_CMD_LEFT_P1 : SLAP_CMD_RIGHT_P1)
+                                            : (left ? SLAP_CMD_LEFT_P2 : SLAP_CMD_RIGHT_P2));
                 return true;
               });
   mcp.AddTool("self.slap_duel.stop", "结束巴掌对决游戏", PropertyList(),

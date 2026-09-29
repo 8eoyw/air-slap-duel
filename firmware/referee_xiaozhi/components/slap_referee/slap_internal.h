@@ -5,8 +5,9 @@
 
 struct SlapMsg {
   enum Kind : uint8_t { EVENT, PEER, COMMAND } kind;
-  uint8_t     peer;       // 0 = attacker, 1 = defender
+  uint8_t     peer;       // slot: 0 = SLAP-ATK / SLAP-P1, 1 = SLAP-DEF / SLAP-P2
   bool        connected;  // PEER
+  bool        player_board;  // PEER: slot holds a player board (SLAP-P1/P2)
   SlapCommand cmd;        // COMMAND
   SlapEvent   event;      // EVENT
   uint32_t    rx_ms;      // EVENT: referee clock at reception

@@ -44,7 +44,7 @@ RefState state_from_name(const char* s) {
 }
 
 RefOutcome outcome_from_name(const char* s) {
-  for (int i = OUT_HIT; i <= OUT_FEINT_HELD; i++)
+  for (int i = OUT_HIT; i < OUT_COUNT_; i++)
     if (strcmp(s, refOutcomeName((RefOutcome)i)) == 0) return (RefOutcome)i;
   return OUT_HIT;
 }
@@ -77,6 +77,7 @@ void dispatch(const char* line) {
     r.defense_cls = cls_from_name(str(o, "defense"));
     r.delta_ms = num(o, "delta_ms");
     r.damage = num(o, "damage");
+    r.counter_damage = num(o, "counter_damage");
     r.attacker = num(o, "attacker");
     read_hp(o, r.hp);
     g_fb->onResult(r);
@@ -139,7 +140,8 @@ void slap_uart_start(SlapFeedback* fb) {
 }
 
 void slap_uart_send_command(SlapCommand cmd) {
-  static const char* names[] = {"start\n", "announce_done\n", "swap_done\n", "reset\n"};
+  static const char* names[] = {"start\n", "announce_done\n", "swap_done\n", "reset\n",
+                                "left1\n", "right1\n", "left2\n", "right2\n"};
   const char* s = names[cmd];
   uart_write_bytes(kPort, s, strlen(s));
 }

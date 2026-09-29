@@ -1,4 +1,4 @@
-// NimBLE central: keeps connections to SLAP-ATK and SLAP-DEF, subscribes to
+// NimBLE central: keeps connections to SLAP-ATK/SLAP-P1 and SLAP-DEF/SLAP-P2, subscribes to
 // their event characteristic and writes clock-sync beacons.
 #include "sdkconfig.h"
 #if CONFIG_SLAP_MODE_BLE
@@ -17,13 +17,17 @@ static const char* TAG = "slap_ble";
 namespace {
 
 struct Peer {
-  const char* name;
+  const char* name;         // role board
+  const char* player_name;  // player board for the same slot
+  bool player_board = false;
   uint16_t conn = BLE_HS_CONN_HANDLE_NONE;
   uint16_t svc_start = 0, svc_end = 0;
   uint16_t event_val = 0, sync_val = 0, event_cccd = 0;
   bool ready = false;
 };
-Peer g_peers[2] = {{SLAP_NAME_ATTACKER}, {SLAP_NAME_DEFENDER}};
+Peer g_peers[2] = {{SLAP_NAME_ATTACKER, SLAP_NAME_P1}, {SLAP_NAME_DEFENDER, SLAP_NAME_P2}};
+const char* shown(const Peer& p) { return p.player_board ? p.player_name : p.name; }
+bool g_pending_player[2];  // which name matched while connecting
 uint8_t g_own_addr_type;
 bool g_connecting = false;
 
@@ -44,6 +48,7 @@ void post_peer(int idx, bool connected) {
   m.kind = SlapMsg::PEER;
   m.peer = idx;
   m.connected = connected;
+  m.player_board = g_peers[idx].player_board;
   slap_post(m);
 }
 
@@ -59,7 +64,7 @@ int on_subscribed(uint16_t conn, const struct ble_gatt_error* err, struct ble_ga
   if (i < 0) return 0;
   if (err->status != 0) { drop(conn, "subscribe failed"); return 0; }
   g_peers[i].ready = true;
-  ESP_LOGI(TAG, "%s ready (event=%d sync=%d)", g_peers[i].name, g_peers[i].event_val, g_peers[i].sync_val);
+  ESP_LOGI(TAG, "%s ready (event=%d sync=%d)", shown(g_peers[i]), g_peers[i].event_val, g_peers[i].sync_val);
   post_peer(i, true);
   start_scan();  // look for the other one
   return 0;
@@ -126,10 +131,15 @@ int match_name(const struct ble_gap_disc_desc& d) {
   struct ble_hs_adv_fields f;
   if (ble_hs_adv_parse_fields(&f, d.data, d.length_data) != 0 || !f.name) return -1;
   for (int i = 0; i < 2; i++) {
-    size_t n = strlen(g_peers[i].name);
-    if (!g_peers[i].ready && g_peers[i].conn == BLE_HS_CONN_HANDLE_NONE && f.name_len == n &&
-        memcmp(f.name, g_peers[i].name, n) == 0)
-      return i;
+    if (g_peers[i].ready || g_peers[i].conn != BLE_HS_CONN_HANDLE_NONE) continue;
+    for (int player = 0; player < 2; player++) {
+      const char* want = player ? g_peers[i].player_name : g_peers[i].name;
+      size_t n = strlen(want);
+      if (f.name_len == n && memcmp(f.name, want, n) == 0) {
+        g_pending_player[i] = player;
+        return i;
+      }
+    }
   }
   return -1;
 }
@@ -149,7 +159,7 @@ void connect_to(const struct ble_gap_disc_desc& d, int idx) {
   int rc = ble_gap_connect(g_own_addr_type, &d.addr, 3000, &cp, gap_event, (void*)(intptr_t)idx);
   if (rc == 0) {
     g_connecting = true;
-    ESP_LOGI(TAG, "connecting to %s", g_peers[idx].name);
+    ESP_LOGI(TAG, "connecting to %s", g_pending_player[idx] ? g_peers[idx].player_name : g_peers[idx].name);
   } else {
     ESP_LOGW(TAG, "connect rc=%d", rc);
     start_scan();
@@ -177,7 +187,8 @@ int gap_event(struct ble_gap_event* ev, void* arg) {
         return 0;
       }
       Peer& p = g_peers[idx];
-      p = Peer{p.name};
+      p = Peer{p.name, p.player_name};
+      p.player_board = g_pending_player[idx];
       p.conn = ev->connect.conn_handle;
       ble_gattc_disc_svc_by_uuid(p.conn, &g_svc_uuid.u, on_svc, nullptr);
       return 0;
@@ -185,10 +196,10 @@ int gap_event(struct ble_gap_event* ev, void* arg) {
     case BLE_GAP_EVENT_DISCONNECT: {
       int idx = peer_by_conn(ev->disconnect.conn.conn_handle);
       if (idx >= 0) {
-        ESP_LOGW(TAG, "%s disconnected (reason %d)", g_peers[idx].name, ev->disconnect.reason);
+        ESP_LOGW(TAG, "%s disconnected (reason %d)", shown(g_peers[idx]), ev->disconnect.reason);
         bool was_ready = g_peers[idx].ready;
-        g_peers[idx] = Peer{g_peers[idx].name};
-        if (was_ready) post_peer(idx, false);
+        if (was_ready) post_peer(idx, false);  // still carries the board kind
+        g_peers[idx] = Peer{g_peers[idx].name, g_peers[idx].player_name};
       }
       start_scan();
       return 0;

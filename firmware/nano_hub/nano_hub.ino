@@ -5,6 +5,7 @@
 //
 // Commands accepted on either serial port (one per line):
 //   start | announce_done | swap_done | reset
+//   left1 | right1 | left2 | right2      (handedness; default right)
 //
 // arduino-cli compile -b arduino:mbed_nano:nano33ble --library ../libraries/SlapCommon .
 #include <ArduinoBLE.h>
@@ -12,12 +13,15 @@
 #include <slap_protocol.h>
 
 struct Peer {
-  const char* name;
+  const char* name;        // role board name
+  const char* player_name; // player board name for the same slot
   BLEDevice dev;
   BLECharacteristic event, sync;
   bool ready = false;
+  bool player_board = false;
+  const char* shown() const { return player_board ? player_name : name; }
 };
-Peer peers[2] = {{SLAP_NAME_ATTACKER}, {SLAP_NAME_DEFENDER}};
+Peer peers[2] = {{SLAP_NAME_ATTACKER, SLAP_NAME_P1}, {SLAP_NAME_DEFENDER, SLAP_NAME_P2}};
 
 // ---- JSON output --------------------------------------------------------
 void emit(const String& line) {
@@ -37,7 +41,7 @@ struct JsonOut : RefereeOutput {
     emit(String("{\"type\":\"result\",\"outcome\":\"") + refOutcomeName(r.outcome) +
          "\",\"strength\":\"" + str[r.strength] + "\",\"attack\":\"" + slapClassName(r.attack_cls) +
          "\",\"defense\":\"" + slapClassName(r.defense_cls) + "\",\"delta_ms\":" + r.delta_ms +
-         ",\"damage\":" + r.damage + ",\"attacker\":" + r.attacker + ",\"hp\":[" + r.hp[0] + "," +
+         ",\"damage\":" + r.damage + ",\"counter_damage\":" + r.counter_damage + ",\"attacker\":" + r.attacker + ",\"hp\":[" + r.hp[0] + "," +
          r.hp[1] + "]}");
   }
   void onSwap(uint8_t next) override {
@@ -50,7 +54,7 @@ struct JsonOut : RefereeOutput {
 RefereeCore ref(&out);
 
 // ---- BLE central --------------------------------------------------------
-bool setupPeer(Peer& p, BLEDevice d) {
+bool setupPeer(Peer& p, BLEDevice d, bool player_board) {
   if (!d.connect()) return false;
   if (!d.discoverService(SLAP_SERVICE_UUID)) { d.disconnect(); return false; }
   p.event = d.characteristic(SLAP_EVENT_UUID);
@@ -58,7 +62,9 @@ bool setupPeer(Peer& p, BLEDevice d) {
   if (!p.event || !p.sync || !p.event.subscribe()) { d.disconnect(); return false; }
   p.dev = d;
   p.ready = true;
-  emit(String("{\"type\":\"peer\",\"name\":\"") + p.name + "\",\"connected\":true}");
+  p.player_board = player_board;
+  ref.setPlayerBoards(player_board);
+  emit(String("{\"type\":\"peer\",\"name\":\"") + p.shown() + "\",\"connected\":true}");
   return true;
 }
 
@@ -73,9 +79,11 @@ void scanForMissing() {
     BLEDevice d = BLE.available();
     if (!d) continue;
     for (Peer& p : peers) {
-      if (!p.ready && d.localName() == p.name) {
+      if (p.ready) continue;
+      bool player = d.localName() == p.player_name;
+      if (player || d.localName() == p.name) {
         BLE.stopScan();
-        setupPeer(p, d);
+        setupPeer(p, d, player);
         return;
       }
     }
@@ -89,16 +97,17 @@ void pollPeers(uint32_t now) {
     if (!p.ready) continue;
     if (!p.dev.connected()) {
       p.ready = false;
-      emit(String("{\"type\":\"peer\",\"name\":\"") + p.name + "\",\"connected\":false}");
+      emit(String("{\"type\":\"peer\",\"name\":\"") + p.shown() + "\",\"connected\":false}");
       continue;
     }
     if (p.event.valueUpdated()) {
       SlapEvent e;
       p.event.readValue(&e, sizeof(e));
-      emit(String("{\"type\":\"event\",\"from\":\"") + p.name + "\",\"cls\":\"" + slapClassName(e.cls) +
+      emit(String("{\"type\":\"event\",\"from\":\"") + p.shown() + "\",\"cls\":\"" + slapClassName(e.cls) +
            "\",\"t\":" + e.t_onset + ",\"rx\":" + now + ",\"conf\":" + e.conf + ",\"peak\":" + e.peak + "}");
-      if (i == 0) ref.onAttackerEvent(e, now);
-      else        ref.onDefenderEvent(e, now);
+      if (p.player_board) ref.onPlayerEvent(i, e, now);
+      else if (i == 0)    ref.onAttackerEvent(e, now);
+      else                ref.onDefenderEvent(e, now);
     }
   }
 }
@@ -119,6 +128,10 @@ void handleCommand(String cmd, uint32_t now) {
   else if (cmd == "announce_done") ref.announceDone(now);
   else if (cmd == "swap_done") ref.swapDone(now);
   else if (cmd == "reset") ref.reset();
+  else if (cmd == "left1") ref.setLeftHanded(0, true);
+  else if (cmd == "right1") ref.setLeftHanded(0, false);
+  else if (cmd == "left2") ref.setLeftHanded(1, true);
+  else if (cmd == "right2") ref.setLeftHanded(1, false);
 }
 
 void readCommands(Stream& s, String& buf, uint32_t now) {
