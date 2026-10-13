@@ -20,9 +20,13 @@
 #ifndef JUMP_LOOKBACK_MS
 #define JUMP_LOOKBACK_MS      300
 #endif
-// Extra wait after the window closes so late BLE notifications can arrive.
+// Extra wait after the window closes so late notifications can arrive. A node only
+// sends once its window is full, so this must cover the post-trigger part of the
+// window ((SLAP_WINDOW - SLAP_PRE) at SAMPLE_HZ = 500 ms) + inference + BLE.
+// Measured rx - t_onset on nano_player: 504-527 ms (2026-10-13). 150 ms made every
+// defense arrive after judging, so every slap came out HIT.
 #ifndef BLE_GRACE_MS
-#define BLE_GRACE_MS          150
+#define BLE_GRACE_MS          600
 #endif
 
 #ifndef ANNOUNCE_TIMEOUT_MS

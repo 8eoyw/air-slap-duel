@@ -277,7 +277,7 @@ static void test_feint_rules() {
   uint32_t t = now + 100;
   ref.onAttackerEvent(ev(t, CLS_FEINT), t + 500);
   CHECK(ref.state() == REF_JUDGING);
-  tick_for(ref, now, 1300);
+  tick_for(ref, now, 100 + DODGE_WINDOW_MAX_MS + BLE_GRACE_MS + 100);
   CHECK(ref.state() == REF_ARMED && rec.results.empty());
 
   // Bitten feint + follow-up after the reaction -> undodgeable crit.
@@ -293,10 +293,10 @@ static void test_feint_rules() {
 
   // The whole attack phase is bounded: feints can't stall past the deadline.
   ref.announceDone(now);
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 10 && rec.results.size() < 2; i++) {  // keep feinting until the phase ends
     t = now + 100;
     ref.onAttackerEvent(ev(t, CLS_FEINT), t + 500);
-    tick_for(ref, now, 1000);
+    tick_for(ref, now, 100 + DODGE_WINDOW_MAX_MS + BLE_GRACE_MS + 100);  // until it re-arms
   }
   CHECK(rec.results.size() == 2 && rec.results[1].outcome == OUT_TIMEOUT);
   tick_for(ref, now, RESOLVE_SHOW_MS);
@@ -306,7 +306,7 @@ static void test_feint_rules() {
   t = now + 100;
   ref.onAttackerEvent(ev(t, CLS_FEINT), t + 500);
   ref.onDefenderEvent(ev(t + 250, CLS_BLOCK), t + 750);
-  tick_for(ref, now, 1600);
+  tick_for(ref, now, 350 + FOLLOWUP_WINDOW_MS + BLE_GRACE_MS + 100);
   CHECK(rec.results.size() == 3 && rec.results[2].outcome == OUT_FEINT_FOOLED);
   CHECK(rec.results[2].damage == 0);
   tick_for(ref, now, RESOLVE_SHOW_MS);
@@ -317,7 +317,7 @@ static void test_feint_rules() {
   ref.onAttackerEvent(ev(t, CLS_FEINT), t + 500);
   ref.onAttackerEvent(ev(t + 200, CLS_FOREHAND, 500), t + 700);
   ref.onDefenderEvent(ev(t + 500, DODGE_FOR_FOREHAND), t + 1000);  // 300 ms after the real slap
-  tick_for(ref, now, 2000);
+  tick_for(ref, now, 600 + COUNTER_WINDOW_MS + BLE_GRACE_MS + 100);  // no counter comes
   CHECK(rec.results.size() == 4 && rec.results[3].outcome == OUT_MISS);
   CHECK(rec.results[3].delta_ms == 300);
 }
