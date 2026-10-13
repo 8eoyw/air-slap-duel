@@ -2,12 +2,14 @@
 // console, so tools/dashboard.py works with either. Control:
 //   BOOT button (GPIO0) -> start / rematch
 //   console lines: start | announce_done | swap_done | reset | left1 | right1 | left2 | right2
+//                  status (re-print peers + state; tools/dashboard.py sends it when it opens)
 #include <stdio.h>
 #include <string.h>
 
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "nvs_flash.h"
 #include "slap_referee.h"
 
 namespace {
@@ -15,6 +17,7 @@ namespace {
 class JsonFeedback : public SlapFeedback {
  public:
   void onState(RefState s) override {
+    state_ = s;
     printf("{\"type\":\"state\",\"state\":\"%s\"}\n", refStateName(s));
   }
   void onAnnounce(uint8_t attacker, uint8_t round) override {
@@ -35,12 +38,33 @@ class JsonFeedback : public SlapFeedback {
     printf("{\"type\":\"game_over\",\"winner\":%u,\"hp\":[%d,%d]}\n", winner, hp[0], hp[1]);
   }
   void onPeer(const char* name, bool connected) override {
-    printf("{\"type\":\"peer\",\"name\":\"%s\",\"connected\":%s}\n", name, connected ? "true" : "false");
+    remember(name, connected);
+    printPeer(name, connected);
+  }
+  // A dashboard opened after the boards connected has missed the peer lines.
+  void reprint() {
+    for (int i = 0; i < npeers_; i++) printPeer(peers_[i].name, peers_[i].connected);
+    printf("{\"type\":\"state\",\"state\":\"%s\"}\n", refStateName(state_));
   }
   void onEvent(const char* from, const SlapEvent& e, uint32_t rx) override {
     printf("{\"type\":\"event\",\"from\":\"%s\",\"cls\":\"%s\",\"t\":%lu,\"rx\":%lu,\"conf\":%u,\"peak\":%u}\n",
            from, slapClassName(e.cls), (unsigned long)e.t_onset, (unsigned long)rx, e.conf, e.peak);
   }
+
+ private:
+  static void printPeer(const char* name, bool connected) {
+    printf("{\"type\":\"peer\",\"name\":\"%s\",\"connected\":%s}\n", name, connected ? "true" : "false");
+  }
+  // Names are the SLAP_NAME_* string literals, so keeping the pointer is enough.
+  void remember(const char* name, bool connected) {
+    for (int i = 0; i < npeers_; i++)
+      if (!strcmp(peers_[i].name, name)) { peers_[i].connected = connected; return; }
+    if (npeers_ < 4) peers_[npeers_++] = {name, connected};
+  }
+  struct Peer { const char* name; bool connected; };
+  Peer peers_[4] = {};
+  int npeers_ = 0;
+  RefState state_ = REF_IDLE;
 };
 
 JsonFeedback g_feedback;
@@ -61,6 +85,7 @@ void console_task(void*) {
     else if (!strcmp(line, "right1")) slap_referee_command(SLAP_CMD_RIGHT_P1);
     else if (!strcmp(line, "left2")) slap_referee_command(SLAP_CMD_LEFT_P2);
     else if (!strcmp(line, "right2")) slap_referee_command(SLAP_CMD_RIGHT_P2);
+    else if (!strcmp(line, "status")) g_feedback.reprint();
   }
 }
 
@@ -82,8 +107,16 @@ void button_task(void*) {
 }  // namespace
 
 extern "C" void app_main() {
+  // NimBLE keeps bonding keys and the PHY its RF calibration in NVS.
+  esp_err_t err = nvs_flash_init();
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    err = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(err);
   setvbuf(stdin, nullptr, _IONBF, 0);
   slap_referee_start(&g_feedback);
-  xTaskCreate(console_task, "console", 3072, nullptr, 3, nullptr);
-  xTaskCreate(button_task, "button", 2048, nullptr, 3, nullptr);
+  // Both tasks print (gpio_config logs too); 2 KB overflowed with the console on UART.
+  xTaskCreate(console_task, "console", 4096, nullptr, 3, nullptr);
+  xTaskCreate(button_task, "button", 4096, nullptr, 3, nullptr);
 }

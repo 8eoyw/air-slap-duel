@@ -1,0 +1,5 @@
+# TTL/UART console: for boards whose native USB (OTG) port does not enumerate, e.g. the
+# Goouuu ESP32-S3-CAM tested 2026-10-13. Flash and monitor through the CH340 "TTL" port.
+#   idf.py -B build_ttl -D SDKCONFIG=sdkconfig.ttl -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;ttl.defaults" build
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n

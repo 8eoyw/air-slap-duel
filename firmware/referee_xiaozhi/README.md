@@ -25,6 +25,9 @@ xiaozhi_glue/              接进 xiaozhi-esp32 的胶水（表情、文字、�
    idf.py set-target esp32s3
    idf.py build flash monitor
    ```
+   > **原生 USB（OTG 口）电脑认不到的板子**（实测 Goouuu ESP32-S3-CAM）：改插 TTL 口（CH340，需装 WCH CH341SER 驱动），
+   > 并把 console 改到 UART：`idf.py -B build_ttl -D SDKCONFIG=sdkconfig.ttl -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;ttl.defaults" -p COMx build flash`
+   >
    > **Windows 注意**：ESP-IDF 在含中文的路径下会报
    > `filesystem error: Cannot convert character sequence`，`subst` 也没用（CMake 会还原真实路径）。
    > 把 `firmware/` 复制到纯英文路径（例如 `C:\esp\slap_build\firmware`）再 build。
