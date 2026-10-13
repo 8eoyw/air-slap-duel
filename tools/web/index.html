@@ -8,10 +8,11 @@
   Served by tools/web_dashboard.py; listens to /events (SSE), posts commands to /cmd.
   No external assets: works offline at the demo.
 
-  Subject: 奶蛙 — the yellow, frog-shaped AI remix of the 奶龙 meme: bulging eyes with greenish
-  whites and dot pupils, a pear-shaped body with a cream belly, olive-brown hands and feet, and a
-  laugh it cannot stop. Its internet vernacular: "我在绷不住大赛中坚持了XX秒", livestream 连麦 audio,
-  famous-painting remixes (拿破蛙). Fan art of a meme, drawn here from scratch.
+  Subject: 奶蛙 and the 奶家人 (奶茶, 奶狗, 豆奶) — the soft 3D AI-video characters of the 奶蛙 meme.
+  They are not redrawn: chars/ holds background-removed frames cut from the original videos
+  (sources and timestamps in chars/SOURCES.md, cut with tools/cut_chars.py). Their signature move
+  is 捧腹大笑 — head thrown back, mouth wide open, both hands on the belly, unable to stop.
+  Its internet vernacular: "我在绷不住大赛中坚持了XX秒", livestream 连麦 audio.
 
   Concept: the duel is a 连麦 PK livestream. Two stream panels side by side; BLE link = 连麦中;
   HP = 绷住值 on a PK tug bar; hits arrive as gift banners with combo counts; outcomes fly past as
@@ -21,6 +22,8 @@
     奶蛙黄 #F6C933  奶油肚 #FFF1D6  橄榄褐 #6E5530  眼白绿 #A8D27A  PK红 #FF3B6B  PK蓝 #2F80FF  夜 #1A1430
     type   heavy YaHei for UI and danmaku; Arial Rounded for numbers; 幼圆 for soft captions
     layout top bar (avatars · PK timer) → PK bar → two stream panels → chat · buttons · keys
+  stream panel: the streamer sits behind a desk, framed waist-up like a webcam (the source frames
+  are mostly waist-up shots, and the desk hides where they are cut off)
 -->
 <style>
 :root {
@@ -55,8 +58,8 @@ button { font-family: inherit; }
 .host.p2 { flex-direction: row-reverse; text-align: right; }
 .avatar { position: relative; flex: none; width: clamp(40px, 4.4vw, 74px); aspect-ratio: 1; border-radius: 50%; background: var(--belly); overflow: hidden;
   box-shadow: 0 0 0 3px var(--c), 0 0 18px var(--c); }
-.avatar svg { position: absolute; left: -12%; top: 4%; width: 124%; }
-.avatar .laugh, .avatar .hurt, .avatar .guard, .avatar .dizzy, .avatar .print { display: none; }   /* resting face only */
+.avatar img { position: absolute; max-width: none; }
+.host .avatar { cursor: pointer; }
 .host .who { min-width: 0; }
 .host .name { font-size: clamp(16px, 1.7vw, 30px); font-weight: 900; line-height: 1.1; }
 .host .meta { display: flex; gap: .5em; align-items: center; margin-top: .35vh; font-size: clamp(10px, .9vw, 15px); opacity: .85; }
@@ -108,28 +111,54 @@ button { font-family: inherit; }
 .role.def { background: #fff; color: var(--night); }
 .role.off { opacity: 0; }
 
-.frog { position: absolute; left: 50%; bottom: 5%; height: 82%; aspect-ratio: 240 / 300; transform: translateX(-50%); }
-.frog .bob { width: 100%; height: 100%; transform-origin: 50% 100%; animation: jiggle 2.6s ease-in-out infinite; }
-#s1 .frog .bob { animation-delay: -1.3s; }
-@keyframes jiggle { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.02, .985); } }
-.frog .body { width: 100%; height: 100%; transform-origin: 50% 100%; }
-.frog svg { width: 100%; height: 100%; overflow: visible; }
-.frog .laugh, .frog .hurt, .frog .guard, .frog .dizzy, .frog .print { opacity: 0; }
-.frog.ouch .calm-face { opacity: 0; }
-.frog.ouch .hurt { opacity: 1; }
-.frog.guarding .guard { opacity: 1; }
-.frog.guarding .arms { opacity: 0; }
-.frog.dazed .dizzy { opacity: 1; }
-.frog.dazed .pupils { opacity: 0; }
-.frog.lol .calm-face, .frog.lol .hurt { opacity: 0; }
-.frog.lol .laugh { opacity: 1; }
-.frog.lol .body { animation: lol .16s linear infinite; }
-@keyframes lol { 0% { transform: translate(0,0) rotate(0); } 25% { transform: translate(-1.5%,1%) rotate(-2deg) scale(1.02,.97); } 50% { transform: translate(0,2%) rotate(0) scale(.98,1.03); } 75% { transform: translate(1.5%,1%) rotate(2deg) scale(1.02,.97); } }
-.frog.lol.bent .bob { transform: rotate(-8deg) translateY(2%); transition: transform .4s; animation: none; }
-#s1 .frog.lol.bent .bob { transform: rotate(8deg) translateY(2%); }
-.frog .print { transition: opacity 1.6s ease-in; }
-.frog .print.show { opacity: .7; transition: none; }
-.frog.glow svg { filter: drop-shadow(0 0 14px #fff); }
+/* streamer: stacked frames of one character, only one visible at a time (no src swapping, so no decode flicker) */
+.streamer { position: absolute; inset: 0; z-index: 1; }
+.streamer .bob, .streamer .body { position: absolute; inset: 0; transform-origin: 50% 88%; }
+.streamer .bob { animation: jiggle 2.6s ease-in-out infinite; }
+#s1 .streamer .bob { animation-delay: -1.3s; }
+@keyframes jiggle { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, .992); } }
+.streamer img { position: absolute; left: 50%; max-width: none; transform: translateX(-50%) scaleX(var(--fx, 1)); opacity: 0; pointer-events: none;
+  filter: drop-shadow(0 1.4vh 1.6vh rgba(40, 10, 30, .35)); }
+.streamer img.still { opacity: 1; }
+.streamer.windup img.still { opacity: 0; }
+.streamer.windup img.windup { opacity: 1; }
+.streamer.laughing img.still, .streamer.laughing img.windup { opacity: 0; }
+.streamer.laughing img.laugh.on { opacity: 1; }
+.streamer.ouch img { filter: drop-shadow(0 1.4vh 1.6vh rgba(40, 10, 30, .35)) brightness(1.12) saturate(1.25) hue-rotate(-8deg); }
+.streamer.glow img { filter: drop-shadow(0 0 1.4vh #fff); }
+.streamer.lol .body { animation: lol .16s linear infinite; }
+@keyframes lol { 0% { transform: translate(0,0) rotate(0); } 25% { transform: translate(-1.2%,.6%) rotate(-1.5deg) scale(1.015,.98); } 50% { transform: translate(0,1.2%) rotate(0) scale(.99,1.02); } 75% { transform: translate(1.2%,.6%) rotate(1.5deg) scale(1.015,.98); } }
+.streamer.lol.bent .bob { transform: rotate(-5deg) translateY(2%); transition: transform .4s; animation: none; }
+#s1 .streamer.lol.bent .bob { transform: rotate(5deg) translateY(2%); }
+/* effects placed on the face by script */
+.fx { position: absolute; z-index: 3; pointer-events: none; transform: translate(-50%, -50%); }
+.print { width: clamp(40px, 5vw, 90px); opacity: 0; transition: opacity 1.6s ease-in; }
+.print.show { opacity: .75; transition: none; }
+.guardfx { display: flex; gap: .2vw; opacity: 0; transition: opacity .15s; }
+.guardfx svg { width: clamp(40px, 4.6vw, 84px); }
+.guardfx svg:last-child { transform: scaleX(-1); }
+.streamer.guarding ~ .guardfx { opacity: 1; }
+.stars { font: 900 clamp(18px, 2vw, 34px)/1 var(--num); color: var(--frog-hi); -webkit-text-stroke: 2px var(--olive); paint-order: stroke fill; opacity: 0; white-space: nowrap; }
+.streamer.dazed ~ .stars { opacity: 1; animation: orbit .9s linear infinite; }
+@keyframes orbit { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* the streamer's desk, in front of the character */
+.desk { position: absolute; left: 0; right: 0; bottom: 0; height: 12%; z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.0) 34%, rgba(0,0,0,.18) 35%, rgba(0,0,0,0) 48%),
+    repeating-linear-gradient(92deg, rgba(120,70,30,.0) 0 22px, rgba(120,70,30,.07) 22px 25px, rgba(120,70,30,0) 25px 61px),
+    linear-gradient(180deg, #fbe7c6 0, #ecc995 30%, #cf9e66 35%, #b07a48 70%, #93613a);
+  box-shadow: 0 -1.2vh 2.4vh rgba(40, 10, 30, .28); }
+.desk::before { content: ""; position: absolute; left: 6%; right: 6%; top: 0; height: 6%; border-radius: 0 0 50% 50%;
+  background: radial-gradient(ellipse at 50% 0, rgba(255,255,255,.75), transparent 70%); }
+.panel .light { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 42% 46% at 50% 46%, rgba(255,255,255,.55), rgba(255,255,255,0) 70%),
+    radial-gradient(circle at 14% 22%, rgba(255,255,255,.35) 0 2.2%, transparent 2.6%),
+    radial-gradient(circle at 84% 30%, rgba(255,255,255,.28) 0 3.4%, transparent 3.9%),
+    radial-gradient(circle at 74% 14%, rgba(255,255,255,.22) 0 1.6%, transparent 2%),
+    radial-gradient(circle at 24% 58%, rgba(255,255,255,.18) 0 4.2%, transparent 4.8%),
+    radial-gradient(circle at 90% 62%, rgba(255,255,255,.2) 0 1.8%, transparent 2.2%),
+    radial-gradient(ellipse 90% 80% at 50% 45%, transparent 55%, rgba(30, 10, 40, .32)); filter: blur(1.5px); }
 
 .stamp { position: absolute; top: 74%; z-index: 6; transform: translate(-50%, -50%) rotate(-14deg); pointer-events: none;
   width: clamp(80px, 9.5vw, 170px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
@@ -226,7 +255,7 @@ button { font-family: inherit; }
   font-size: clamp(12px, 1vw, 16px); opacity: 0; transition: opacity .3s; pointer-events: none; }
 #toast.show { opacity: 1; }
 #offline { position: fixed; top: 0; left: 0; right: 0; z-index: 50; text-align: center; background: var(--red); padding: .3em; font-size: 14px; font-weight: 700; }
-@media (prefers-reduced-motion: reduce) { .frog .bob, .live.on::before, #idle .go { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .streamer .bob, .live.on::before, #idle .go { animation: none; } }
 </style>
 </head>
 <body>
@@ -253,22 +282,22 @@ button { font-family: inherit; }
 
 <div id="app">
   <div id="top">
-    <div class="host p1" style="--c: var(--red)"><div class="avatar" id="av0"></div>
-      <div class="who"><div class="name">奶蛙</div><div class="meta"><span class="live" id="live0">未连麦</span><span class="dev" id="dev0">SLAP-P1</span></div></div></div>
+    <div class="host p1" style="--c: var(--red)"><div class="avatar" id="av0" title="换主播（开局前，按 1）"></div>
+      <div class="who"><div class="name" id="name0"></div><div class="meta"><span class="live" id="live0">未连麦</span><span class="dev" id="dev0">SLAP-P1</span></div></div></div>
     <div id="pkbadge"><div class="pk">PK</div><div class="clock" id="clock">等待开局</div></div>
-    <div class="host p2" style="--c: var(--blue)"><div class="avatar" id="av1"></div>
-      <div class="who"><div class="name">拿破蛙</div><div class="meta"><span class="live" id="live1">未连麦</span><span class="dev" id="dev1">SLAP-P2</span></div></div></div>
+    <div class="host p2" style="--c: var(--blue)"><div class="avatar" id="av1" title="换主播（开局前，按 2）"></div>
+      <div class="who"><div class="name" id="name1"></div><div class="meta"><span class="live" id="live1">未连麦</span><span class="dev" id="dev1">SLAP-P2</span></div></div></div>
   </div>
 
   <div id="pk"><div class="r" style="width:50%"></div><div class="b" style="width:50%"></div><div class="v" style="left:50%">VS</div>
     <div class="n" id="pkn0"><small>绷住值</small>100</div><div class="n" id="pkn1">100<small>绷住值</small></div></div>
 
   <div id="streams">
-    <div class="panel" id="s0"><div class="tag">奶蛙的直播间</div><div class="role off" id="role0">出手</div><div class="frog" id="f0"></div></div>
-    <div class="panel" id="s1"><div class="tag">拿破蛙的直播间</div><div class="role off" id="role1">防守</div><div class="frog" id="f1"></div></div>
+    <div class="panel" id="s0"><div class="tag" id="tag0"></div><div class="role off" id="role0">出手</div><div class="light"></div><div class="streamer" id="f0"></div><div class="desk"></div></div>
+    <div class="panel" id="s1"><div class="tag" id="tag1"></div><div class="role off" id="role1">防守</div><div class="light"></div><div class="streamer" id="f1"></div><div class="desk"></div></div>
     <div id="danmaku"></div>
     <div id="call"></div>
-    <div id="idle"><div class="t">绷不住大赛</div><div class="s">空气巴掌 · 先绷不住的蛙输</div><div><span class="go" id="gohint">按空格开局</span></div></div>
+    <div id="idle"><div class="t">绷不住大赛</div><div class="s">空气巴掌 · 先绷不住的输 · 按 1 / 2 换主播</div><div><span class="go" id="gohint">按空格开局</span></div></div>
     <div id="end" class="hidden"><div class="t">绷不住了！</div><div><span class="s" id="endline"></span></div><div class="again">按空格再来一局</div></div>
   </div>
 
@@ -283,7 +312,7 @@ button { font-family: inherit; }
     <div id="keys" class="hidden"></div>
   </div>
 </div>
-<div id="hand"><svg viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="url(#g-olive)" stroke="#3a2c14" stroke-width="2"/></svg></div>
+<div id="hand"><svg viewBox="-40 -50 80 95"><use id="handuse" href="#palm" x="-30" y="-40" width="60" height="70" fill="#5d5446" stroke="#2e271d" stroke-width="2"/></svg></div>
 <div id="flash"></div>
 <div id="toast"></div>
 <div id="offline" class="hidden">和 web_dashboard.py 的连接断了，正在重连…</div>
@@ -294,7 +323,25 @@ button { font-family: inherit; }
 const ATTACK_TIMEOUT_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
-const FROG = [{ name: "奶蛙", hat: false }, { name: "拿破蛙", hat: true }];
+// Streamers. Frames live in chars/<id>/ (served at /chars/). pose: height and bottom as % of the panel,
+// x shift in %, face = which way the frame looks (it is mirrored so the streamer faces the opponent).
+// cheek / face: [x, y] as fractions of the still frame, for P1 (opponent on the right); P2 mirrors x.
+// avatar: the still frame's size and offset inside the round avatar, in % of the avatar.
+const seq = (n) => Array.from({ length: n }, (_, k) => "laugh_" + k);
+const CHARS = [
+  { id: "naiwa", name: "奶蛙", still: "still_0", laugh: seq(13), fps: 12, hand: "#5d5446",
+    pose: { still: { h: 90, b: -9 }, laugh: { h: 90, b: -11, face: "right" } }, cheek: [.64, .12], avatar: { w: 260, x: -80, y: 2 } },
+  { id: "naicha", name: "奶茶", still: "laugh_0", laugh: seq(8), fps: 8, hand: "#55524c",
+    pose: { still: { h: 66, b: 9 }, laugh: { h: 66, b: 9 } }, cheek: [.62, .36], avatar: { w: 170, x: -26, y: -18 } },
+  { id: "naigou", name: "奶狗", still: "still", laugh: seq(5), fps: 7, hand: "#d9c38d",
+    pose: { still: { h: 70, b: 10, face: "left" }, laugh: { h: 84, b: 8 } }, cheek: [.82, .14], avatar: { w: 220, x: -112, y: -8 } },
+  { id: "dounai", name: "豆奶", still: "still", laugh: seq(5), fps: 6, hand: "#e9a83c",
+    pose: { still: { h: 90, b: -4 }, laugh: { h: 86, b: -4 } }, cheek: [.6, .2], avatar: { w: 175, x: -38, y: -6 } },
+];
+const loadPick = () => { try { const p = JSON.parse(localStorage.getItem("slap.streamers")); if (p && CHARS[p[0]] && CHARS[p[1]]) return p; } catch (e) {} return [0, 1]; };
+const PICK = loadPick();
+const who = (i) => CHARS[PICK[i]];
+const nm = (i) => who(i).name;
 const CLS = { forehand: "正手", backhand: "反手", feint: "假动作", dodge_left: "左闪", dodge_right: "右闪", block: "格挡", background: "背景" };
 const OUTCOME = {
   HIT:            { big: "啪！",       cls: "red",  dm: ["好响", "这一巴掌有回音", "啪！！", "听着都疼", "脸都打歪了"] },
@@ -318,55 +365,59 @@ const KEYMAP = {
 const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false, mode: "referee",
             startedAt: 0, combo: [0, 0] };
 
-/* ---------------- the frog (inner SVG shared by the stream panel and the avatars) ---------------- */
-function frogInner(i) {
-  const hat = FROG[i].hat ? `
-    <g class="hat" transform="translate(120 34)">
-      <path d="M-78 4 C-60 -30 -30 -44 0 -44 C30 -44 60 -30 78 4 C50 -8 -50 -8 -78 4 Z" fill="#1d1a2b" stroke="#000" stroke-width="2"/>
-      <path d="M-74 2 C-48 -9 48 -9 74 2" fill="none" stroke="#d8b14a" stroke-width="4"/>
-      <circle cx="-14" cy="-20" r="8" fill="#2f80ff" stroke="#fff" stroke-width="3"/><circle cx="-14" cy="-20" r="2.6" fill="#ff3b6b"/>
-    </g>` : "";
-  const flip = i === 1 ? 'transform="translate(240 0) scale(-1 1)"' : "";
-  return `
-    <g ${flip}>
-      <ellipse cx="86" cy="286" rx="26" ry="11" fill="url(#g-olive)"/><ellipse cx="156" cy="286" rx="26" ry="11" fill="url(#g-olive)"/>
-      <path d="M120 40 C168 40 186 86 188 128 C191 186 214 236 206 280 L34 280 C26 236 49 186 52 128 C54 86 72 40 120 40 Z" fill="url(#g-body)"/>
-      <ellipse cx="120" cy="214" rx="64" ry="62" fill="url(#g-belly)"/>
-      <ellipse cx="96" cy="78" rx="30" ry="20" fill="#fff" opacity=".35"/>
-      <g class="arms">
-        <path d="M54 150 C40 170 34 192 40 214" fill="none" stroke="url(#g-olive)" stroke-width="13" stroke-linecap="round"/>
-        <path d="M186 150 C200 170 206 192 200 214" fill="none" stroke="url(#g-olive)" stroke-width="13" stroke-linecap="round"/>
-      </g>
-      <g class="guard">
-        <path d="M58 150 C80 140 100 132 116 118" fill="none" stroke="url(#g-olive)" stroke-width="14" stroke-linecap="round"/>
-        <path d="M182 150 C160 140 140 132 124 118" fill="none" stroke="url(#g-olive)" stroke-width="14" stroke-linecap="round"/>
-        <circle cx="114" cy="112" r="14" fill="url(#g-olive)"/><circle cx="128" cy="116" r="14" fill="url(#g-olive)"/>
-      </g>
-      <g class="eyes">
-        <circle cx="90" cy="54" r="27" fill="url(#g-body)"/><circle cx="150" cy="54" r="27" fill="url(#g-body)"/>
-        <circle cx="90" cy="52" r="18" fill="url(#g-eye)" stroke="#6f9f3f" stroke-width="2.5"/>
-        <circle cx="150" cy="52" r="18" fill="url(#g-eye)" stroke="#6f9f3f" stroke-width="2.5"/>
-        <g class="pupils"><circle cx="92" cy="53" r="3.6" fill="#111"/><circle cx="148" cy="53" r="3.6" fill="#111"/></g>
-        <g class="dizzy" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round">
-          <path d="M90 52 m-8 0 a8 8 0 1 1 8 8 a5 5 0 1 1 -5 -5"/><path d="M150 52 m-8 0 a8 8 0 1 1 8 8 a5 5 0 1 1 -5 -5"/>
-        </g>
-        <circle cx="84" cy="45" r="4" fill="#fff" opacity=".8"/><circle cx="144" cy="45" r="4" fill="#fff" opacity=".8"/>
-      </g>
-      <g class="calm-face"><path d="M76 98 C100 106 140 106 164 98" fill="none" stroke="#8a5a1e" stroke-width="4.5" stroke-linecap="round"/></g>
-      <g class="hurt"><path d="M86 108 C96 94 144 94 154 108 C140 102 100 102 86 108 Z" fill="#7a3d12" stroke="#5a2c0c" stroke-width="3"/>
-        <path d="M70 70 l10 -6 M170 70 l-10 -6" stroke="#8a5a1e" stroke-width="3" stroke-linecap="round"/></g>
-      <g class="laugh"><path d="M72 94 C90 92 150 92 168 94 C164 132 76 132 72 94 Z" fill="#6b2e0e" stroke="#4a1f08" stroke-width="3"/>
-        <path d="M96 116 C108 126 132 126 144 116 C134 110 106 110 96 116 Z" fill="#e8567a"/>
-        <path d="M76 95 L164 95" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".9"/></g>
-      <g class="print" fill="#e0233f"><use href="#palm" x="140" y="76" width="40" height="46" transform="rotate(18 160 99)"/></g>
-    </g>
-    ${hat}`;
+/* ---------------- the streamer (stacked frames shared by the stream panel and the avatars) ---------------- */
+const src = (c, f) => `/chars/${c.id}/${f}.webp`;
+function flips(i, state) { const f = who(i).pose[state].face; return (f === "left" && i === 0) || (f === "right" && i === 1); }
+function frameImg(i, cls, f, state) {
+  const c = who(i), p = c.pose[state];
+  return `<img class="${cls}" src="${src(c, f)}" alt="" draggable="false"
+    style="height:${p.h}%;bottom:${p.b}%;margin-left:${p.x || 0}%;--fx:${flips(i, state) ? -1 : 1}">`;
 }
-function frogSVG(i) {
-  return `<div class="bob"><div class="body"><svg viewBox="0 0 240 300">
-    <ellipse cx="120" cy="292" rx="88" ry="10" fill="rgba(0,0,0,.18)"/>${frogInner(i)}</svg></div></div>`;
+function streamerHTML(i) {
+  const c = who(i);
+  return `<div class="bob"><div class="body">${frameImg(i, "still", c.still, "still")}${c.windup ? frameImg(i, "windup", c.windup, "still") : ""}${
+    c.laugh.map(f => frameImg(i, "laugh", f, "laugh")).join("")}</div></div>`;
 }
-function avatarSVG(i) { return `<svg viewBox="40 0 160 140">${frogInner(i)}</svg>`; }   // head crop
+function avatarHTML(i) {
+  const c = who(i), a = c.avatar;
+  return `<img src="${src(c, c.still)}" alt="" draggable="false" style="width:${a.w}%;${i === 1 && c.pose.still.face ? "transform:scaleX(-1);right" : "left"}:${a.x}%;top:${a.y}%">`;
+}
+function setStreamer(i) {
+  const c = who(i), f = $("f" + i), panel = $("s" + i);
+  f.className = "streamer"; f.innerHTML = streamerHTML(i);
+  panel.querySelectorAll(".fx").forEach(e => e.remove());
+  panel.insertAdjacentHTML("beforeend", `
+    <svg class="fx print" viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="#e0233f"/></svg>
+    <div class="fx guardfx">${`<svg viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="${c.hand}" stroke="rgba(0,0,0,.45)" stroke-width="2.5"/></svg>`.repeat(2)}</div>
+    <div class="fx stars">✦ ✧ ✦</div>`);
+  $("av" + i).innerHTML = avatarHTML(i);
+  $("name" + i).textContent = c.name;
+  $("tag" + i).textContent = c.name + "的直播间";
+  const leg = document.querySelector("#keys .who.p" + i); if (leg) leg.textContent = c.name;
+}
+function cycleStreamer(i) {
+  if (!(S.state === "IDLE" || S.over)) { toast("比赛中不能换主播"); return; }
+  do { PICK[i] = (PICK[i] + 1) % CHARS.length; } while (PICK[i] === PICK[i ^ 1] && CHARS.length > 1);
+  try { localStorage.setItem("slap.streamers", JSON.stringify(PICK)); } catch (e) {}
+  setStreamer(i);
+  if (S.over) $("f" + (S.winner ^ 1)).classList.add("lol");
+  Sfx.boing();
+}
+
+// Signature move: 捧腹大笑. Ping-pongs through the laugh frames; ms = 0 laughs until stopped.
+function laugh(i, ms = 0) {
+  const f = $("f" + i), frames = [...f.querySelectorAll("img.laugh")];
+  clearInterval(f.lH); clearTimeout(f.lT);
+  let k = 0, dir = 1;
+  f.classList.remove("windup"); f.classList.add("laughing");
+  const step = () => {
+    frames.forEach((x, j) => x.classList.toggle("on", j === k));
+    if (frames.length > 1) { if (k + dir < 0 || k + dir >= frames.length) dir = -dir; k += dir; }
+  };
+  step(); f.lH = setInterval(step, 1000 / who(i).fps);
+  if (ms) f.lT = setTimeout(() => stopLaugh(i), ms);
+}
+function stopLaugh(i) { const f = $("f" + i); clearInterval(f.lH); clearTimeout(f.lT); f.classList.remove("laughing"); }
 
 /* ---------------- sound (synthesised, no files) ---------------- */
 const Sfx = {
@@ -426,8 +477,17 @@ const Sfx = {
 };
 
 /* ---------------- helpers ---------------- */
-function frogBox(i) { const r = $("f" + i).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top, w: r.width, h: r.height }; }
-function cheekOf(i) { const b = frogBox(i); return { x: b.x + (i ? -1 : 1) * b.w * 0.2, y: b.y + b.h * 0.3 }; }
+// The visible character, not the whole panel: the still frame's box (the laugh frames are close-ups of the same pose).
+function charBox(i) { const r = $("f" + i).querySelector("img.still").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top, w: r.width, h: r.height, r }; }
+function facePoint(i, xy) {   // [x, y] fractions of the still frame, given for P1; P2 is mirrored
+  const { r } = charBox(i), fx = i ? 1 - xy[0] : xy[0];
+  return { x: r.left + fx * r.width, y: r.top + xy[1] * r.height };
+}
+function cheekOf(i) { return facePoint(i, who(i).cheek); }
+function placeFx(i, sel, x, y) {   // viewport point -> position inside panel i
+  const e = $("s" + i).querySelector(sel), pr = $("s" + i).getBoundingClientRect();
+  e.style.left = x - pr.left + "px"; e.style.top = y - pr.top + "px"; return e;
+}
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2200); }
 function playerOf(name) { return /P2|DEF/.test(name) ? 1 : 0; }
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -501,7 +561,7 @@ function popText(x, y, text) {
 
 function popDamage(i, dmg, label, crit) {
   if (!dmg) return;
-  const b = frogBox(i), d = document.createElement("div");
+  const b = charBox(i), d = document.createElement("div");
   d.className = "dmg" + (crit ? " crit" : "");
   d.innerHTML = `−${dmg}${label ? `<small>${label}</small>` : ""}`;
   d.style.left = b.x + (i ? 1 : -1) * b.w * 0.55 + "px"; d.style.top = b.y + b.h * 0.18 + "px";
@@ -517,8 +577,8 @@ function gift(atk, label, strength) {
   panel.querySelectorAll(".gift").forEach(g => g.remove());
   const g = document.createElement("div");
   g.className = "gift";
-  g.innerHTML = `<div class="avatar" style="--c:#fff">${avatarSVG(atk)}</div>
-    <div class="txt"><b>${FROG[atk].name}</b><br>送出 ${label}</div>
+  g.innerHTML = `<div class="avatar" style="--c:#fff">${avatarHTML(atk)}</div>
+    <div class="txt"><b>${nm(atk)}</b><br>送出 ${label}</div>
     <svg class="item" viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="${strength === "heavy" ? "#ff3b6b" : "#f6c933"}" stroke="#6e5530" stroke-width="3"/></svg>
     <div class="combo"><small>×</small>${S.combo[atk]}</div>`;
   panel.appendChild(g);
@@ -529,9 +589,11 @@ function gift(atk, label, strength) {
   Sfx.gift();
 }
 
-// Olive-brown hand reaches across the split screen to the other frog's cheek. Returns ms to contact.
+// The attacker's own hand (olive-grey for 奶蛙, a paw for 奶狗...) reaches across the split screen to the other cheek. Returns ms to contact.
 function swing(from, to, connects = true) {
-  const h = $("hand"), a = frogBox(from), b = cheekOf(to);
+  const h = $("hand"), a = charBox(from), b = cheekOf(to);
+  $("f" + from).classList.remove("windup");
+  $("handuse").setAttribute("fill", who(from).hand);
   const hw = h.getBoundingClientRect().width || 100, dir = to > from ? 1 : -1;
   const x0 = a.x + dir * a.w * 0.3 - hw / 2, x1 = b.x - dir * hw * (connects ? 0.15 : -1.2) - hw / 2, y = b.y - hw / 2;
   h.animate([
@@ -545,35 +607,41 @@ function swing(from, to, connects = true) {
 
 function squash(i, k) {   // jelly recoil away from the slap
   const f = $("f" + i), body = f.querySelector(".body"), dir = i === 1 ? 1 : -1;
+  stopLaugh(i);
   body.animate([
     { transform: "none" },
-    { transform: `translateX(${dir * 10 * k}%) rotate(${dir * 14 * k}deg) scale(${1 - .14 * k},${1 + .1 * k})`, offset: .1 },
-    { transform: `translateX(${-dir * 4 * k}%) rotate(${-dir * 6 * k}deg) scale(${1 + .1 * k},${1 - .1 * k})`, offset: .35 },
+    { transform: `translateX(${dir * 5 * k}%) rotate(${dir * 10 * k}deg) scale(${1 - .1 * k},${1 + .07 * k})`, offset: .1 },
+    { transform: `translateX(${-dir * 2 * k}%) rotate(${-dir * 4 * k}deg) scale(${1 + .07 * k},${1 - .07 * k})`, offset: .35 },
     { transform: `rotate(${dir * 3 * k}deg) scale(${1 - .04 * k},${1 + .04 * k})`, offset: .6 },
     { transform: "none" },
   ], { duration: 800 + 300 * k, easing: "cubic-bezier(.2,.9,.3,1)" });
   f.classList.remove("ouch"); void f.offsetWidth; f.classList.add("ouch");
   clearTimeout(f.ouchH); f.ouchH = setTimeout(() => f.classList.remove("ouch"), 1000);
-  const p = f.querySelector(".print"); p.classList.add("show"); void p.getBoundingClientRect(); setTimeout(() => p.classList.remove("show"), 900);
+  const c = cheekOf(i), p = placeFx(i, ".print", c.x, c.y);
+  p.style.transform = `translate(-50%,-50%) rotate(${i ? -18 : 18}deg)`;
+  p.classList.add("show"); void p.getBoundingClientRect(); setTimeout(() => p.classList.remove("show"), 900);
   Sfx.boing();
 }
 
 function dodge(i, cls) {
   const body = $("f" + i).querySelector(".body"), dir = cls === "dodge_left" ? -1 : 1;
-  body.animate([{ transform: "none" }, { transform: `translateX(${dir * 30}%) rotate(${dir * 18}deg) scale(.9,1.08)`, offset: .2 },
-    { transform: `translateX(${dir * 26}%) rotate(${dir * 14}deg)`, offset: .6 }, { transform: "none" }], { duration: 720, easing: "cubic-bezier(.2,.9,.3,1)" });
+  body.animate([{ transform: "none" }, { transform: `translateX(${dir * 17}%) rotate(${dir * 12}deg) scale(.94,1.05)`, offset: .2 },
+    { transform: `translateX(${dir * 14}%) rotate(${dir * 9}deg)`, offset: .6 }, { transform: "none" }], { duration: 720, easing: "cubic-bezier(.2,.9,.3,1)" });
 }
-function guard(i) {
-  const f = $("f" + i); f.classList.add("guarding"); clearTimeout(f.gH); f.gH = setTimeout(() => f.classList.remove("guarding"), 900);
+function guard(i) {   // both hands up in front of the face
+  const f = $("f" + i), c = facePoint(i, [0.5, who(i).cheek[1] + 0.04]);
+  placeFx(i, ".guardfx", c.x, c.y); f.classList.add("guarding"); clearTimeout(f.gH); f.gH = setTimeout(() => f.classList.remove("guarding"), 900);
   f.querySelector(".body").animate([{ transform: "none" }, { transform: "scale(1.06,.94)", offset: .3 }, { transform: "none" }], { duration: 500 });
 }
-function daze(i) {
-  const f = $("f" + i); f.classList.add("dazed"); clearTimeout(f.dH); f.dH = setTimeout(() => f.classList.remove("dazed"), 1300);
+function daze(i) {   // stars circling over the head
+  const f = $("f" + i), c = facePoint(i, [0.5, 0]);
+  placeFx(i, ".stars", c.x, c.y); f.classList.add("dazed"); clearTimeout(f.dH); f.dH = setTimeout(() => f.classList.remove("dazed"), 1300);
   f.querySelector(".body").animate([{ transform: "none" }, { transform: "rotate(-6deg)" }, { transform: "rotate(6deg)" }, { transform: "rotate(-4deg)" }, { transform: "none" }], { duration: 900 });
 }
 
-function impact(def, k, crit) {
+function impact(def, k, crit) {   // a slap that lands cracks the streamer up for a moment (绷住值 drops)
   squash(def, k);
+  clearTimeout($("f" + def).crackH); $("f" + def).crackH = setTimeout(() => laugh(def, 700 + 600 * k), 450);
   const c = cheekOf(def);
   popText(c.x, c.y, pick(["啪", "啪！", "PIA"]));
   shake(k); Sfx.slap(k);
@@ -592,14 +660,14 @@ function onResult(m, animate) {
       const t = swing(atk, def);
       setTimeout(() => { impact(def, k, false); setHp(m.hp); popDamage(def, m.damage, m.strength === "heavy" ? "痛击" : ""); }, t);
       gift(atk, hitLabel, m.strength);
-      call(m.strength === "heavy" && m.outcome === "HIT" ? "痛击！" : o.big, o.cls, m.outcome === "JUMPED" ? `${FROG[def].name}动得太早，照吃` : delta);
+      call(m.strength === "heavy" && m.outcome === "HIT" ? "痛击！" : o.big, o.cls, m.outcome === "JUMPED" ? `${nm(def)}动得太早，照吃` : delta);
       break;
     }
     case "FEINT_PUNISHED": {
       const t = swing(atk, def);
       setTimeout(() => { impact(def, 1.2, true); setHp(m.hp); popDamage(def, m.damage, "暴击", true); }, t);
       gift(atk, "假动作+真巴掌", "heavy");
-      call(o.big, o.cls, `${FROG[def].name}信了假动作`);
+      call(o.big, o.cls, `${nm(def)}信了假动作`);
       break;
     }
     case "GRAZE": {
@@ -627,7 +695,7 @@ function onResult(m, animate) {
         setTimeout(() => { impact(atk, 1.1, true); setHp(m.hp); popDamage(atk, m.counter_damage, "反击", true); }, t);
         gift(def, "反击巴掌", "heavy");
       }, 440);
-      call(o.big, o.cls, `${FROG[def].name}闪开后反手一巴掌`, 1500);
+      call(o.big, o.cls, `${nm(def)}闪开后反手一巴掌`, 1500);
       break;
     }
     case "FEINT_FOOLED": case "FEINT_HELD":
@@ -640,12 +708,12 @@ function onResult(m, animate) {
 }
 
 function onGameOver(m, animate) {
-  S.over = true;
+  S.over = true; S.winner = m.winner;
   setHp(m.hp, animate);
   const loser = m.winner ^ 1, secs = S.startedAt ? Math.round((performance.now() - S.startedAt) / 1000) : null;
   const show = () => {
     const lf = $("f" + loser);
-    lf.classList.add("lol"); setTimeout(() => lf.classList.add("bent"), 1800);
+    clearTimeout(lf.crackH); lf.classList.add("lol"); laugh(loser); setTimeout(() => lf.classList.add("bent"), 1800);
     for (const i of [0, 1]) {
       const st = document.createElement("div");
       st.className = "stamp " + (i === m.winner ? "win" : "lose"); st.textContent = i === m.winner ? "胜" : "败";
@@ -654,14 +722,14 @@ function onGameOver(m, animate) {
         { duration: 320, delay: i === m.winner ? 0 : 160, easing: "cubic-bezier(.3,1.5,.5,1)", fill: "backwards" });
     }
     $("endline").innerHTML = secs != null
-      ? `${FROG[m.winner].name}在绷不住大赛中坚持了<b>${secs}</b>秒`
-      : `${FROG[m.winner].name}绷住了，${FROG[loser].name}没绷住`;
+      ? `${nm(m.winner)}在绷不住大赛中坚持了<b>${secs}</b>秒`
+      : `${nm(m.winner)}绷住了，${nm(loser)}没绷住`;
     $("end").classList.remove("hidden");
     if (animate) {
       $("end").querySelector(".t").animate([{ transform: "scale(.2) rotate(-10deg)", opacity: 0 }, { transform: "scale(1.1) rotate(2deg)", opacity: 1, offset: .6 }, { transform: "scale(1)", opacity: 1 }],
         { duration: 600, easing: "cubic-bezier(.3,1.6,.5,1)", fill: "forwards" });
       flash(0.6); shake(1.1); Sfx.laugh(2.6);
-      for (let k = 0; k < 14; k++) danmaku(pick(["哈哈哈哈哈哈", "绷不住了", "笑死", "哈哈哈哈哈哈哈哈", "蛙已经笑疯了", "我也绷不住了"]), { delay: k * 180, y: k % 3 === 0, big: k % 4 === 0, speed: 4200 });
+      for (let k = 0; k < 14; k++) danmaku(pick(["哈哈哈哈哈哈", "绷不住了", "笑死", "哈哈哈哈哈哈哈哈", `${nm(loser)}已经笑疯了`, "我也绷不住了", "咳哈哈哈哈"]), { delay: k * 180, y: k % 3 === 0, big: k % 4 === 0, speed: 4200 });
     }
     setRoles();
   };
@@ -672,7 +740,7 @@ function resetBoard() {
   S.over = false; S.round = 0; S.deadline = 0; S.combo = [0, 0];
   $("end").classList.add("hidden");
   document.querySelectorAll(".stamp, .gift").forEach(e => e.remove());
-  for (const i of [0, 1]) $("f" + i).classList.remove("lol", "bent", "ouch", "guarding", "dazed");
+  for (const i of [0, 1]) { const f = $("f" + i); clearTimeout(f.crackH); stopLaugh(i); f.classList.remove("lol", "bent", "ouch", "guarding", "dazed", "windup"); }
   setHp([100, 100], false);
 }
 
@@ -682,7 +750,7 @@ function handle(m, animate = true) {
       const i = playerOf(m.name), live = $("live" + i), was = live.classList.contains("on");
       live.classList.toggle("on", !!m.connected); live.textContent = m.connected ? "连麦中" : "未连麦";
       $("dev" + i).textContent = m.name;
-      if (animate && was !== !!m.connected) toast(`${FROG[i].name}${m.connected ? "连上麦了" : "掉线了"}（${m.name}）`);
+      if (animate && was !== !!m.connected) toast(`${nm(i)}${m.connected ? "连上麦了" : "掉线了"}（${m.name}）`);
       break;
     }
     case "state":
@@ -690,6 +758,7 @@ function handle(m, animate = true) {
       if (m.state === "IDLE") resetBoard();
       if (m.state === "ARMED" && !S.deadline) S.deadline = performance.now() + ATTACK_TIMEOUT_MS;
       S.judging = m.state === "JUDGING";
+      for (const i of [0, 1]) $("f" + i).classList.toggle("windup", m.state === "ARMED" && i === S.attacker && !!who(i).windup);
       if (m.state !== "ARMED" && m.state !== "JUDGING") S.deadline = 0;
       $("idle").classList.toggle("hidden", m.state !== "IDLE");
       setRoles();
@@ -700,7 +769,7 @@ function handle(m, animate = true) {
       $("idle").classList.add("hidden");
       setRoles();
       if (animate) {
-        call(`第 ${m.round} 回合`, "", `${FROG[m.attacker].name}出手`, 1000);
+        call(`第 ${m.round} 回合`, "", `${nm(m.attacker)}出手`, 1000);
         if (m.round === 1) { Sfx.ding(784); Sfx.ding(1046, .12); danmaku("开打了开打了", { y: true }); danmaku("前排围观", { delay: 400 }); }
         else Sfx.ding(880);
       }
@@ -717,7 +786,7 @@ function handle(m, animate = true) {
 
 function addEvent(m) {
   const i = playerOf(m.from);
-  chat(FROG[i].name, CLS[m.cls] || m.cls, `${Math.round((m.conf / 255) * 100)}% · ${m.peak}°/s · 延迟 ${m.rx - m.t} ms`, i);
+  chat(nm(i), CLS[m.cls] || m.cls, `${Math.round((m.conf / 255) * 100)}% · ${m.peak}°/s · 延迟 ${m.rx - m.t} ms`, i);
   const f = $("f" + i); f.classList.add("glow"); clearTimeout(f.glowH); f.glowH = setTimeout(() => f.classList.remove("glow"), 220);
   if (m.cls === "forehand" || m.cls === "backhand" || m.cls === "feint") Sfx.whoosh(0.12);
 }
@@ -728,7 +797,7 @@ function tick() {
   if (S.deadline) {
     const left = Math.max(0, S.deadline - performance.now());
     b.classList.toggle("urgent", left < 1500 && !S.judging);
-    c.innerHTML = S.judging ? `第 ${S.round} 回合 · 判定中` : `${FROG[S.attacker].name}出手 <b>${(left / 1000).toFixed(1)}</b> 秒`;
+    c.innerHTML = S.judging ? `第 ${S.round} 回合 · 判定中` : `${nm(S.attacker)}出手 <b>${(left / 1000).toFixed(1)}</b> 秒`;
   } else {
     b.classList.remove("urgent");
     c.textContent = S.over ? "本场结束" : S.state === "IDLE" ? "等待开局" : S.round ? `第 ${S.round} 回合` : "准备";
@@ -746,7 +815,7 @@ function buildLegend() {
   const label = { feint: "假动作", forehand: "正手", backhand: "反手", dodge_left: "左闪", block: "格挡", dodge_right: "右闪" };
   const box = $("keys");
   for (const i of [0, 1]) {
-    const w = document.createElement("div"); w.className = "who p" + i; w.textContent = FROG[i].name; box.appendChild(w);
+    const w = document.createElement("div"); w.className = "who p" + i; w.textContent = nm(i); box.appendChild(w);
     for (const cls of ["feint", "forehand", "backhand", "dodge_left", "block", "dodge_right"]) {
       const code = Object.keys(KEYMAP).find(c => KEYMAP[c][0] === i && KEYMAP[c][1] === cls);
       const d = document.createElement("div"); d.className = "k"; d.id = "k-" + code;
@@ -782,6 +851,7 @@ document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (keyAction(e)) { e.preventDefault(); return; }
   if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); press("[data-cmd=start]"); send("start"); }
+  else if (e.code === "Digit1" || e.code === "Digit2") cycleStreamer(e.code === "Digit1" ? 0 : 1);
   else if (e.code === "KeyR") { press("[data-cmd=reset]"); send("reset"); }
   else if (e.code === "KeyM") { press("#mute"); toggleMute(); }
   else if (e.code === "KeyF") { press("#fs"); toggleFs(); }
@@ -796,8 +866,8 @@ function connect() {
   es.onmessage = (ev) => { try { handle(JSON.parse(ev.data)); } catch (err) { console.error(err, ev.data); } };
   es.onerror = () => $("offline").classList.remove("hidden");
 }
-for (const i of [0, 1]) { $("f" + i).innerHTML = frogSVG(i); $("av" + i).innerHTML = avatarSVG(i); }
 buildLegend();
+for (const i of [0, 1]) { setStreamer(i); $("av" + i).addEventListener("click", () => cycleStreamer(i)); }
 setHp([100, 100], false);
 requestAnimationFrame(tick);
 connect();

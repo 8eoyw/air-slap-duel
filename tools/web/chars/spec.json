@@ -1,0 +1,108 @@
+[
+{
+"id": "naiwa/laugh",
+"video": "BV1rQpg6oEPZ",
+"t": [
+155.7,
+158.15,
+0.2
+],
+"box": [
+0,
+0,
+690,
+720
+],
+"dark_top": 0.32,
+"clear": [
+[
+0,
+0,
+1,
+0.3,
+"notyellow"
+]
+]
+},
+{
+"id": "naiwa/still",
+"video": "BV1t4uh6tENG",
+"t": [
+108.0,
+110.42
+],
+"match": "D:/學習用/學習用/作業/air-slap-duel/tools/web/chars/naiwa/laugh_0.webp"
+},
+{
+"id": "naicha/laugh",
+"video": "BV1rQpg6oEPZ",
+"t": [
+74.0,
+74.7,
+0.1
+]
+},
+{
+"id": "naigou/still",
+"video": "BV14yto62ESb",
+"t": 9.5,
+"box": [
+330,
+300,
+720,
+1100
+]
+},
+{
+"id": "naigou/laugh",
+"video": "BV1udbN6GEya",
+"t": [
+26.8,
+27.8,
+0.12
+],
+"frames": [
+0,
+1,
+2,
+3,
+4
+]
+},
+{
+"id": "dounai/still",
+"video": "BV1t4uh6tENG",
+"t": 100.2,
+"clear": [
+[
+0,
+0.28,
+0.2,
+0.8,
+"dark"
+]
+]
+},
+{
+"id": "dounai/laugh",
+"video": "BV1rQpg6oEPZ",
+"t": [
+236.0,
+243.5,
+0.75
+],
+"box": [
+445,
+275,
+560,
+560
+],
+"frames": [
+5,
+6,
+7,
+8,
+9
+]
+}
+]

@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Inside a PyInstaller exe the page and the simulator are unpacked under sys._MEIPASS.
 BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
 PAGE = BUNDLE / "tools" / "web" / "index.html"
+CHARS = BUNDLE / "tools" / "web" / "chars"   # character cutouts, see tools/web/chars/SOURCES.md
 SIM_EXE = BUNDLE / "build" / ("sim_match.exe" if sys.platform == "win32" else "sim_match")
 # Same simulator built with a short BLE_GRACE_MS: key presses have no sensor latency to wait for.
 KEYS_EXE = BUNDLE / "build" / ("sim_keys.exe" if sys.platform == "win32" else "sim_keys")
@@ -226,6 +227,18 @@ def make_handler(hub, source):
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path.startswith("/chars/") and self.path.endswith(".webp"):
+                f = (CHARS / self.path[len("/chars/"):]).resolve()
+                if CHARS.resolve() not in f.parents or not f.is_file():
+                    self.send_error(404)
+                    return
+                body = f.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/webp")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=3600")
                 self.end_headers()
                 self.wfile.write(body)
             elif self.path == "/events":

@@ -124,9 +124,9 @@ arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/
 python tools/ble_monitor.py
 ```
 
-**比赛画面（demo 投影用）**：「绷不住大赛」——把对决包装成直播连麦 PK，主角是网络迷因奶蛙（P2 是戴拿破仑帽的拿破蛙）。
+**比赛画面（demo 投影用）**：「绷不住大赛」——把对决包装成直播连麦 PK，主播是网络迷因奶蛙和奶家人（奶茶、奶狗、豆奶），开局前按 1 / 2 换人。
 蓝牙连线显示成「连麦中」，血条是 PK 拉锯的「绷住值」，命中跳送礼横幅与连击数，判定结果飞弹幕，
-传感器事件进聊天框；绷住值归零的蛙笑到停不下来。角色是照迷因外形手绘的 SVG，音效现场合成，不需要联网。
+传感器事件进聊天框；被打中会忍不住笑，绷住值归零的一方捧腹大笑停不下来。角色是从原作 AI 影片抽帧去背的图（来源见 `tools/web/chars/SOURCES.md`），音效现场合成，不需要联网。
 空格开局、R 重置、M 静音、F 全屏，按钮与按键会把指令送回裁判。
 
 ```bash
@@ -139,7 +139,7 @@ make -C tests keys && python tools/web_dashboard.py --keys # 没有硬件：两�
 
 不带参数时自动判断：插着裁判板（CH340 / ESP32 USB / CP210x）就接它，没有就进键盘对打。
 打包成单一 exe（双击即用，Windows）：先用 `-static` 编 `build/sim_match.exe` 与 `build/sim_keys.exe`，再
-`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "build/sim_match.exe;build" --add-data "build/sim_keys.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
+`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "tools/web/chars;tools/web/chars" --add-data "build/sim_match.exe;build" --add-data "build/sim_keys.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
 
 还没有数据时，可以先用合成数据把整条 pipeline 跑一遍：
 `python tools/synth_data.py && cd ml && python train.py --task attacker --data ../data_synth`
