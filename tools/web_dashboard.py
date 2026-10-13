@@ -10,7 +10,8 @@ Standard library only (pyserial for --port).
     build/sim_match --realtime | python tools/web_dashboard.py --stdin
     python tools/web_dashboard.py --replay results/match1.jsonl
     python tools/web_dashboard.py --port COM5 --host 0.0.0.0   # open from a phone / other PC
-    python tools/web_dashboard.py                           # auto: ESP32 port if one is plugged in, else --sim
+    python tools/web_dashboard.py --keys                    # play both sides on the keyboard
+    python tools/web_dashboard.py                           # auto: ESP32 port if one is plugged in, else --keys
 
 Then open http://127.0.0.1:8765 (done automatically unless --no-browser).
 Also packaged as a single exe (PyInstaller), which runs in the auto mode when double-clicked.
@@ -18,6 +19,7 @@ Also packaged as a single exe (PyInstaller), which runs in the auto mode when do
 import argparse
 import json
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -31,6 +33,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
 PAGE = BUNDLE / "tools" / "web" / "index.html"
 SIM_EXE = BUNDLE / "build" / ("sim_match.exe" if sys.platform == "win32" else "sim_match")
+# Same simulator built with a short BLE_GRACE_MS: key presses have no sensor latency to wait for.
+KEYS_EXE = BUNDLE / "build" / ("sim_keys.exe" if sys.platform == "win32" else "sim_keys")
+EVENT_CMD = re.compile(r"^ev [01] (forehand|backhand|feint|dodge_left|dodge_right|block) \d{1,4}$")
 # USB-serial bridges seen on referee boards: CH340 (Goouuu S3-CAM TTL port), Espressif native USB, CP210x.
 REFEREE_VIDS = {0x1A86, 0x303A, 0x10C4}
 COMMANDS = {"start", "reset", "announce_done", "swap_done", "status",
@@ -40,7 +45,8 @@ COMMANDS = {"start", "reset", "announce_done", "swap_done", "status",
 class Hub:
     """Fans every referee line out to the open pages; keeps enough to redraw a new page."""
 
-    def __init__(self, log_path=None):
+    def __init__(self, log_path=None, mode="referee"):
+        self.mode = mode  # tells the page whether keyboard play is on
         self.lock = threading.Lock()
         self.clients = []
         self.peers = {}
@@ -65,7 +71,7 @@ class Hub:
     def subscribe(self):
         q = queue.Queue()
         with self.lock:
-            snapshot = {"type": "snapshot", "items": list(self.peers.values()) + self.game}
+            snapshot = {"type": "snapshot", "mode": self.mode, "items": list(self.peers.values()) + self.game}
             self.clients.append(q)
         return q, snapshot
 
@@ -150,6 +156,36 @@ class SimSource:
             parse(line, self.hub)
 
 
+class KeysSource:
+    """Both players on the keyboard: page key presses -> 'ev ...' lines -> real referee core."""
+
+    def __init__(self, hub):
+        if not KEYS_EXE.exists():
+            sys.exit(f"{KEYS_EXE} not found: build it with  make -C tests keys")
+        self.hub = hub
+        self.wlock = threading.Lock()
+        self.proc = subprocess.Popen([str(KEYS_EXE), "--interactive", "--latency", "20"],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                     text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in self.proc.stdout:
+            parse(line, self.hub)
+
+    def send(self, cmd):
+        if cmd not in ("start", "reset") and not EVENT_CMD.match(cmd):
+            return False
+        with self.wlock:
+            self.proc.stdin.write(cmd + "\n")
+            self.proc.stdin.flush()
+        return True
+
+    def close(self):
+        if self.proc.poll() is None:
+            self.proc.kill()
+
+
 class StreamSource:
     """stdin or a replay file; commands have nowhere to go."""
 
@@ -229,7 +265,7 @@ def make_handler(hub, source):
                 return
             n = int(self.headers.get("Content-Length") or 0)
             cmd = self.rfile.read(n).decode(errors="ignore").strip()
-            ok = cmd in COMMANDS and source.send(cmd)
+            ok = (cmd in COMMANDS or bool(EVENT_CMD.match(cmd))) and source.send(cmd)
             self.send_response(204 if ok else 409)
             self.end_headers()
 
@@ -258,6 +294,7 @@ def main():
     g = ap.add_mutually_exclusive_group()  # none given -> auto
     g.add_argument("--port", help="serial port of the referee (ESP32 standalone or nano_hub)")
     g.add_argument("--sim", action="store_true", help="simulated matches (build/sim_match)")
+    g.add_argument("--keys", action="store_true", help="play both sides on the keyboard (build/sim_keys)")
     g.add_argument("--stdin", action="store_true", help="JSON lines on stdin")
     g.add_argument("--replay", type=Path, help="JSONL log written by --log or dashboard.py")
     ap.add_argument("--fast", action="store_true", help="--replay: no pacing, jump to the end")
@@ -276,16 +313,18 @@ def main():
         if not args.no_browser:
             webbrowser.open(url)
         return
-    if not (args.port or args.sim or args.stdin or args.replay):
+    if not (args.port or args.sim or args.keys or args.stdin or args.replay):
         args.port = find_referee_port()
-        args.sim = args.port is None
-        print(f"auto: {'referee on ' + args.port if args.port else 'no referee board found, simulated matches'}",
+        args.keys = args.port is None
+        print(f"auto: {'referee on ' + args.port if args.port else 'no referee board found, keyboard play'}",
               file=sys.stderr)
     if args.log:
         args.log.parent.mkdir(parents=True, exist_ok=True)
-    hub = Hub(args.log)
+    hub = Hub(args.log, "keys" if args.keys else "referee")
     if args.port:
         source = SerialSource(args.port, hub)
+    elif args.keys:
+        source = KeysSource(hub)
     elif args.sim:
         source = SimSource(hub, args.latency)
     else:

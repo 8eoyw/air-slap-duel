@@ -124,17 +124,21 @@ arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/
 python tools/ble_monitor.py
 ```
 
-**比赛画面（demo 投影用）**：格斗游戏风格的网页，血条、出手动画、命中特效、K.O.，音效现场合成，不需要联网。
+**比赛画面（demo 投影用）**：仿《Rose & Camellia》的洋馆风格网页（人物是原创的浮雕侧脸，不是原作美术），
+血条、出手动画、手印与花瓣、扇挡、胜负画面，音效现场合成，不需要联网。
 空格开局、R 重置、M 静音、F 全屏，按钮与按键会把指令送回裁判。
 
 ```bash
 python tools/web_dashboard.py --port COM5     # 接小智裁判（standalone）或 nano_hub
 make -C tests sim && python tools/web_dashboard.py --sim   # 没有硬件：模拟比赛，按空格开一场
+make -C tests keys && python tools/web_dashboard.py --keys # 没有硬件：两人用键盘对打，规则走同一份裁判核心
 ```
 
-不带参数时自动判断：插着裁判板（CH340 / ESP32 USB / CP210x）就接它，没有就进模拟模式。
-打包成单一 exe（双击即用，Windows）：先用 `-static` 编 `build/sim_match.exe`，再
-`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "build/sim_match.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
+键盘对打：P1 `W` 虚招 `A` 正手 `D` 反手 `Q` 左闪 `S` 扇挡 `E` 右闪；P2 `I` `J` `L` `U` `K` `O` 同位置。按住 Shift 是重击、Alt 是轻击。右撇子规则：正手要往右闪、反手往左闪。
+
+不带参数时自动判断：插着裁判板（CH340 / ESP32 USB / CP210x）就接它，没有就进键盘对打。
+打包成单一 exe（双击即用，Windows）：先用 `-static` 编 `build/sim_match.exe` 与 `build/sim_keys.exe`，再
+`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "build/sim_match.exe;build" --add-data "build/sim_keys.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
 
 还没有数据时，可以先用合成数据把整条 pipeline 跑一遍：
 `python tools/synth_data.py && cd ml && python train.py --task attacker --data ../data_synth`
