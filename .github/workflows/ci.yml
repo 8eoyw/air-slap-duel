@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: make -C tests
+      - run: make -C tests test sim
 
   nano-firmware:
     runs-on: ubuntu-latest

@@ -5,6 +5,7 @@ bars and the last results, and appends everything to a JSONL log for the report.
     python tools/dashboard.py --port COM7
     python tools/dashboard.py --port COM7 --log results/match1.jsonl
     python tools/dashboard.py --replay results/match1.jsonl
+    build/sim_match --realtime | python tools/dashboard.py --stdin   # no hardware
 
 Type 'start', 'swap_done' etc. + Enter to send commands to the referee.
 """
@@ -75,6 +76,7 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--port")
     g.add_argument("--replay", type=Path)
+    g.add_argument("--stdin", action="store_true", help="read JSON lines from stdin (tools/sim_match.cpp)")
     ap.add_argument("--log", type=Path)
     args = ap.parse_args()
     board = Board()
@@ -85,18 +87,30 @@ def main():
         board.render()
         return
 
-    import serial
-    ser = serial.Serial(args.port, 115200, timeout=0.2)
     log = open(args.log, "a", encoding="utf-8") if args.log else None
+    if args.stdin:
+        def read_line():
+            line = sys.stdin.readline()
+            if not line:  # producer finished: draw the final board and stop
+                board.render()
+                sys.exit(0)
+            return line.strip()
+    else:
+        import serial
+        ser = serial.Serial(args.port, 115200, timeout=0.2)
+        ser.write(b"status\n")  # boards may have connected before we opened the port
 
-    def stdin_loop():
-        for line in sys.stdin:
-            ser.write((line.strip() + "\n").encode())
-    threading.Thread(target=stdin_loop, daemon=True).start()
+        def read_line():
+            return ser.readline().decode(errors="ignore").strip()
+
+        def stdin_loop():
+            for line in sys.stdin:
+                ser.write((line.strip() + "\n").encode())
+        threading.Thread(target=stdin_loop, daemon=True).start()
 
     last_draw = 0
     while True:
-        line = ser.readline().decode(errors="ignore").strip()
+        line = read_line()
         if line.startswith("{"):
             try:
                 m = json.loads(line)
