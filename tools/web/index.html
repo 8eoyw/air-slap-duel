@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>空气巴掌对决</title>
+<!-- Served by tools/web_dashboard.py; listens to /events (SSE), posts commands to /cmd.
+     No external assets: works offline at the demo. -->
+<style>
+:root {
+  --ink: #12091c;
+  --p1: #ff3b5c;
+  --p2: #2fb8ff;
+  --gold: #ffd23f;
+  --skin1: #ffd2a8;
+  --skin2: #f5c08e;
+  --display: "Arial Black", Impact, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --text: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: #fff; font-family: var(--text); }
+body { user-select: none; }
+
+/* ---------- arena ---------- */
+#arena {
+  position: fixed; inset: 0; overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, #4a1d6e 0%, #26103d 45%, #12091c 80%);
+}
+#arena::before {               /* stage floor */
+  content: ""; position: absolute; left: -50%; right: -50%; bottom: -10%; height: 55%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 2px, transparent 2px 80px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 2px, transparent 2px 80px),
+    linear-gradient(#2b1146, #12091c 70%);
+  transform: perspective(500px) rotateX(62deg);
+  transform-origin: top;
+  animation: floor 6s linear infinite;
+}
+@keyframes floor { to { background-position: 80px 0, 0 80px, 0 0; } }
+#arena::after {                /* vignette + spotlights */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 22% 60% at 27% 0%, rgba(255,59,92,.18), transparent 70%),
+    radial-gradient(ellipse 22% 60% at 73% 0%, rgba(47,184,255,.18), transparent 70%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.65));
+}
+#speedlines {
+  position: absolute; inset: -20%; pointer-events: none; opacity: 0;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.22) 0 1.2deg, transparent 1.2deg 7deg);
+  mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+  -webkit-mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+}
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: absolute; top: 2.2vh; left: 2.5vw; right: 2.5vw; z-index: 10;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 1.6vw;
+}
+.side { display: flex; flex-direction: column; gap: .7vh; }
+.side.p2 { align-items: flex-end; }
+.tag { display: flex; align-items: baseline; gap: .8vw; }
+.side.p2 .tag { flex-direction: row-reverse; }
+.pname {
+  font: italic 900 clamp(22px, 3.4vw, 56px)/1 var(--display); letter-spacing: .02em;
+  -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill;
+  text-shadow: 0 .25vw 0 var(--ink);
+}
+.p1 .pname { color: var(--p1); }
+.p2 .pname { color: var(--p2); }
+.dev { font-size: clamp(11px, 1vw, 16px); opacity: .85; display: flex; align-items: center; gap: .4em; }
+.dot { width: .7em; height: .7em; border-radius: 50%; background: #555; box-shadow: 0 0 0 2px rgba(255,255,255,.15); }
+.dot.on { background: #3dff8c; box-shadow: 0 0 10px #3dff8c; }
+.bar {
+  position: relative; width: 100%; height: clamp(22px, 4.2vh, 46px);
+  background: #1b0d27; border: 3px solid #fff; outline: 3px solid var(--ink);
+  transform: skewX(-18deg); overflow: hidden;
+}
+.side.p2 .bar { transform: skewX(18deg); }
+.bar .trail, .bar .fill { position: absolute; top: 0; bottom: 0; width: 100%; }
+.p1 .bar .trail, .p1 .bar .fill { right: 0; }
+.p2 .bar .trail, .p2 .bar .fill { left: 0; }
+.bar .trail { background: #fff; transition: width .6s ease-in .55s; }
+.bar .fill {
+  background: linear-gradient(180deg, #fff6a8 0%, var(--gold) 35%, #ff9d00 100%);
+  transition: width .12s ease-out;
+}
+.bar.low .fill { background: linear-gradient(180deg, #ffb0b0, #ff3b3b 40%, #b3001b); animation: lowpulse .6s ease-in-out infinite alternate; }
+@keyframes lowpulse { to { filter: brightness(1.5); } }
+.hpnum { font: italic 900 clamp(14px, 1.6vw, 26px)/1 var(--display); opacity: .9; }
+
+#center { display: flex; flex-direction: column; align-items: center; gap: .6vh; min-width: 11vw; }
+#roundbadge {
+  font: italic 900 clamp(12px, 1.2vw, 20px)/1 var(--display); letter-spacing: .15em;
+  background: var(--gold); color: var(--ink); padding: .35em .9em; transform: skewX(-12deg);
+}
+#timer { position: relative; width: clamp(64px, 7vw, 120px); aspect-ratio: 1; }
+#timer svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+#timer circle { fill: none; stroke-width: 9; }
+#timer .track { stroke: rgba(255,255,255,.12); }
+#timer .ring { stroke: var(--gold); stroke-linecap: round; transition: stroke .2s; }
+#timer.urgent .ring { stroke: #ff3b3b; }
+#timernum {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 900 clamp(26px, 3.2vw, 54px)/1 var(--display);
+  -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill;
+}
+#timer.idle #timernum { font-size: clamp(14px, 1.4vw, 24px); opacity: .7; }
+#timer.judging #timernum { font-size: clamp(14px, 1.5vw, 26px); }
+
+/* ---------- stage ---------- */
+#stage { position: absolute; inset: 0; z-index: 5; }
+.fighter {
+  position: absolute; bottom: 15vh; width: min(21vw, 37vh); aspect-ratio: 200 / 230;
+  transform: translateX(-50%);
+}
+#f0 { left: 27%; }
+#f1 { left: 73%; }
+.fighter .bob { width: 100%; height: 100%; animation: bob 2.4s ease-in-out infinite; }
+#f1 .bob { animation-delay: -1.2s; }
+@keyframes bob { 50% { transform: translateY(-1.6%); } }
+.fighter .body { width: 100%; height: 100%; transform-origin: 50% 85%; }
+.fighter svg.face { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 1.2vh 0 rgba(0,0,0,.35)); }
+.fighter .eyes-x, .fighter .mouth-ouch, .fighter .print { opacity: 0; }
+.fighter.ouch .eyes-open, .fighter.ouch .mouth { opacity: 0; }
+.fighter.ouch .eyes-x, .fighter.ouch .mouth-ouch { opacity: 1; }
+.fighter .print { transition: opacity 1.8s ease-in; }
+.fighter .print.show { opacity: .85; transition: none; }
+.fighter.ko .body { transform: rotate(-14deg) translateY(4%); transition: transform .5s; }
+#f1.ko .body { transform: rotate(14deg) translateY(4%); }
+.fighter.ko .eyes-open, .fighter.ko .mouth { opacity: 0; }
+.fighter.ko .eyes-x, .fighter.ko .mouth-ouch { opacity: 1; }
+.shadow {
+  position: absolute; left: 50%; bottom: -3%; width: 70%; height: 9%; transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(0,0,0,.55), transparent 70%);
+}
+.role {
+  position: absolute; left: 50%; bottom: -12%; transform: translateX(-50%) skewX(-12deg);
+  font: italic 900 clamp(12px, 1.4vw, 22px)/1 var(--display); letter-spacing: .12em;
+  padding: .4em 1em; white-space: nowrap; transition: opacity .2s;
+}
+.role.atk { background: var(--p1); }
+.role.def { background: #3a5bff; }
+.role.hidden { opacity: 0; }
+.shield {
+  position: absolute; inset: 4% 2% 10%; border-radius: 50%; opacity: 0; pointer-events: none;
+  border: .7vw solid #8fd8ff; box-shadow: 0 0 3vw #2fb8ff, inset 0 0 3vw #2fb8ff;
+}
+.stars { position: absolute; left: 50%; top: -6%; width: 70%; height: 22%; transform: translateX(-50%); opacity: 0; pointer-events: none; }
+.stars span { position: absolute; top: 40%; font-size: clamp(16px, 2.2vw, 36px); color: var(--gold); text-shadow: 0 0 8px var(--gold); }
+.fighter.ko .stars { opacity: 1; animation: orbit 1.4s linear infinite; }
+@keyframes orbit { to { transform: translateX(-50%) rotateY(360deg); } }
+
+#hand { position: absolute; width: min(11vw, 19vh); aspect-ratio: 1; left: 0; top: 0; opacity: 0; pointer-events: none; z-index: 8; }
+#hand svg { width: 100%; height: 100%; overflow: visible; }
+
+/* ---------- announcer ---------- */
+#announcer { position: absolute; left: 0; right: 0; top: 21vh; z-index: 20; text-align: center; pointer-events: none; }
+.big {
+  display: inline-block; font: italic 900 clamp(48px, 10vw, 180px)/1 var(--display);
+  letter-spacing: .02em; color: var(--gold);
+  background: linear-gradient(180deg, #fffbe0 0%, var(--gold) 45%, #ff7a00 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: clamp(2px, .35vw, 6px) var(--ink);
+  filter: drop-shadow(0 .5vw 0 var(--ink)) drop-shadow(0 0 2vw rgba(255,160,0,.45));
+}
+.big.red  { background-image: linear-gradient(180deg, #fff 0%, #ff8a8a 40%, #e8002d 100%); }
+.big.cyan { background-image: linear-gradient(180deg, #fff 0%, #8ff0ff 40%, #0091ff 100%); }
+.big.blue { background-image: linear-gradient(180deg, #fff 0%, #a9b8ff 40%, #3a5bff 100%); }
+.big.pink { background-image: linear-gradient(180deg, #fff 0%, #ff9cf0 40%, #c400ff 100%); }
+.big.grey { background-image: linear-gradient(180deg, #fff 0%, #c9c2d6 50%, #6d6480 100%); }
+.sub {
+  display: block; margin-top: 1.2vh; font: italic 900 clamp(16px, 2.4vw, 40px)/1.1 var(--display);
+  -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; text-shadow: 0 .3vw 0 var(--ink);
+}
+#idlehint { position: absolute; left: 0; right: 0; top: 19vh; text-align: center; z-index: 19; pointer-events: none; }
+#idlehint .title {
+  font: italic 900 clamp(36px, 7vw, 120px)/1 var(--display);
+  background: linear-gradient(180deg, #fff 0%, #ffb3c0 45%, var(--p1) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: clamp(2px, .3vw, 5px) var(--ink);
+  filter: drop-shadow(0 .45vw 0 var(--ink));
+}
+#idlehint .en { display: block; font: italic 900 clamp(14px, 1.8vw, 30px)/1 var(--display); letter-spacing: .5em; color: var(--p2); margin-top: 1vh; }
+#idlehint .press { display: inline-block; margin-top: 4vh; font: 900 clamp(14px, 1.8vw, 30px)/1 var(--display); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.hidden { display: none !important; }
+
+.dmg {
+  position: absolute; z-index: 22; pointer-events: none; transform: translate(-50%, -50%);
+  font: italic 900 clamp(28px, 4.5vw, 80px)/1 var(--display); color: #fff;
+  -webkit-text-stroke: clamp(2px, .25vw, 4px) #c4001f; paint-order: stroke fill;
+  text-shadow: 0 .3vw 0 #5a0010;
+}
+.dmg.crit { color: var(--gold); -webkit-text-stroke-color: #b34700; }
+.dmg small { display: block; font-size: .38em; letter-spacing: .1em; }
+.spark { position: absolute; z-index: 21; width: 1.1vw; height: 1.1vw; margin: -.55vw; border-radius: 50%; pointer-events: none; background: #fff; box-shadow: 0 0 12px 4px var(--c, #ffd23f); }
+
+/* ---------- KO ---------- */
+#ko { position: absolute; inset: 0; z-index: 25; pointer-events: none; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, rgba(18,9,28,.2), rgba(18,9,28,.8)); }
+#ko .k { font: italic 900 clamp(90px, 22vw, 380px)/.9 var(--display); letter-spacing: -.02em; }
+#ko .winner { font: italic 900 clamp(24px, 4vw, 70px)/1.1 var(--display); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 0 .35vw 0 var(--ink); }
+#ko .again { margin-top: 3vh; font: 900 clamp(13px, 1.5vw, 24px)/1 var(--display); opacity: .85; animation: blink 1s steps(2) infinite; }
+
+/* ---------- feed + controls ---------- */
+#bottom {
+  position: absolute; left: 2.5vw; right: 2.5vw; bottom: 2vh; z-index: 10;
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5vw; align-items: end;
+}
+.feed { display: flex; flex-direction: column; align-items: flex-start; gap: .4vh; font-size: clamp(11px, .95vw, 15px); min-height: 7vh; justify-content: flex-end; }
+.feed.p2 { align-items: flex-end; }
+.evt { display: flex; gap: .7em; align-items: center; padding: .25em .7em; background: rgba(0,0,0,.4); border-left: 3px solid var(--p1); white-space: nowrap; animation: evtin .25s ease-out; }
+.feed.p2 .evt { border-left: 0; border-right: 3px solid var(--p2); }
+.evt b { font-family: var(--display); font-style: italic; min-width: 3.6em; }
+.evt .lat { opacity: .65; font-variant-numeric: tabular-nums; }
+@keyframes evtin { from { opacity: 0; transform: translateY(8px); } }
+#controls { display: flex; gap: .5vw; }
+#controls button {
+  font: italic 900 clamp(11px, 1vw, 16px)/1 var(--display); color: #fff; cursor: pointer;
+  background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.35); padding: .6em 1em;
+  transform: skewX(-12deg); transition: background .15s, border-color .15s;
+}
+#controls button:hover { background: rgba(255,255,255,.2); border-color: #fff; }
+#controls button.primary { background: var(--p1); border-color: var(--p1); }
+#controls button kbd { font: inherit; opacity: .6; margin-left: .4em; }
+#toast {
+  position: absolute; left: 50%; top: 13vh; transform: translateX(-50%); z-index: 40;
+  background: #000c; border: 1px solid #fff4; padding: .6em 1.2em; font-size: clamp(12px, 1vw, 16px);
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+#toast.show { opacity: 1; }
+#offline { position: absolute; top: 0; left: 0; right: 0; z-index: 50; text-align: center; background: #b3001b; padding: .3em; font-size: 14px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="handprint" viewBox="-30 -40 60 70">
+      <ellipse cx="0" cy="8" rx="17" ry="19"/>
+      <ellipse cx="-14" cy="-20" rx="4.6" ry="13" transform="rotate(-14 -14 -20)"/>
+      <ellipse cx="-4" cy="-26" rx="4.8" ry="14"/>
+      <ellipse cx="6.5" cy="-25" rx="4.8" ry="13.5" transform="rotate(6 6.5 -25)"/>
+      <ellipse cx="16" cy="-18" rx="4.4" ry="11.5" transform="rotate(16 16 -18)"/>
+      <ellipse cx="-22" cy="10" rx="4.6" ry="11" transform="rotate(-50 -22 10)"/>
+    </symbol>
+    <g id="facebase">
+      <path class="tails" d="M30 92 C 6 96, -8 120, -2 140 C 6 124, 16 116, 34 108 Z M28 100 C 2 112, -2 140, 10 156 C 12 138, 22 124, 38 112 Z"/>
+      <ellipse cx="100" cy="122" rx="78" ry="86" class="skin" stroke="#12091c" stroke-width="6"/>
+      <ellipse cx="22" cy="128" rx="9" ry="15" class="skin" stroke="#12091c" stroke-width="5"/>
+      <ellipse cx="178" cy="128" rx="9" ry="15" class="skin" stroke="#12091c" stroke-width="5"/>
+      <path d="M24 112 C 18 30, 182 30, 176 112 C 150 70, 50 70, 24 112 Z" fill="#12091c"/>
+      <path class="band" d="M25 84 Q100 62 175 84 L174 102 Q100 80 26 102 Z" stroke="#12091c" stroke-width="4"/>
+      <ellipse cx="58" cy="152" rx="14" ry="8" fill="#ff7b8c" opacity=".45"/>
+      <ellipse cx="142" cy="152" rx="14" ry="8" fill="#ff7b8c" opacity=".45"/>
+      <g class="eyes-open">
+        <path d="M54 104 L84 110 M146 104 L116 110" stroke="#12091c" stroke-width="7" stroke-linecap="round"/>
+        <ellipse cx="72" cy="128" rx="9" ry="12" fill="#12091c"/>
+        <ellipse cx="128" cy="128" rx="9" ry="12" fill="#12091c"/>
+        <circle cx="75" cy="124" r="3" fill="#fff"/>
+        <circle cx="131" cy="124" r="3" fill="#fff"/>
+      </g>
+      <g class="eyes-x" stroke="#12091c" stroke-width="7" stroke-linecap="round">
+        <path d="M62 118 L82 138 M82 118 L62 138"/>
+        <path d="M118 118 L138 138 M138 118 L118 138"/>
+      </g>
+      <path class="mouth" d="M80 166 Q100 180 120 166" fill="none" stroke="#12091c" stroke-width="7" stroke-linecap="round"/>
+      <ellipse class="mouth-ouch" cx="100" cy="172" rx="13" ry="16" fill="#5a0010" stroke="#12091c" stroke-width="6"/>
+    </g>
+  </defs>
+</svg>
+
+<div id="arena"><div id="speedlines"></div></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div class="side p1">
+    <div class="tag"><span class="pname">P1</span><span class="dev"><span class="dot" id="dot0"></span><span id="dev0">SLAP-P1</span></span></div>
+    <div class="bar" id="bar0"><div class="trail"></div><div class="fill"></div></div>
+    <div class="hpnum" id="hpn0">100</div>
+  </div>
+  <div id="center">
+    <div id="roundbadge">READY</div>
+    <div id="timer" class="idle">
+      <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="ring" cx="50" cy="50" r="42" stroke-dasharray="263.9" stroke-dashoffset="0"/></svg>
+      <div id="timernum">待机</div>
+    </div>
+  </div>
+  <div class="side p2">
+    <div class="tag"><span class="pname">P2</span><span class="dev"><span class="dot" id="dot1"></span><span id="dev1">SLAP-P2</span></span></div>
+    <div class="bar" id="bar1"><div class="trail"></div><div class="fill"></div></div>
+    <div class="hpnum" id="hpn1">100</div>
+  </div>
+</div>
+
+<div id="stage">
+  <div class="fighter" id="f0" style="--skin: var(--skin1); --team: var(--p1)">
+    <div class="shadow"></div>
+    <div class="bob"><div class="body">
+      <svg class="face" viewBox="0 0 200 230">
+        <style>#f0 .skin{fill:var(--skin1)} #f0 .band,#f0 .tails{fill:var(--p1)}</style>
+        <g class="facewrap"></g>
+        <g class="print print-l" fill="#e8002d"><use href="#handprint" x="30" y="120" width="44" height="52" transform="rotate(-18 52 146)"/></g>
+        <g class="print print-r" fill="#e8002d"><use href="#handprint" x="126" y="120" width="44" height="52" transform="rotate(18 148 146)"/></g>
+      </svg>
+      <div class="shield"></div>
+      <div class="stars"><span style="left:0">★</span><span style="left:45%">★</span><span style="right:0">★</span></div>
+    </div></div>
+    <div class="role hidden" id="role0">进攻</div>
+  </div>
+  <div class="fighter" id="f1">
+    <div class="shadow"></div>
+    <div class="bob"><div class="body">
+      <svg class="face" viewBox="0 0 200 230">
+        <style>#f1 .skin{fill:var(--skin2)} #f1 .band,#f1 .tails{fill:var(--p2)} #f1 .tails{transform:translateX(200px) scaleX(-1)}</style>
+        <g class="facewrap"></g>
+        <g class="print print-l" fill="#e8002d"><use href="#handprint" x="30" y="120" width="44" height="52" transform="rotate(-18 52 146)"/></g>
+        <g class="print print-r" fill="#e8002d"><use href="#handprint" x="126" y="120" width="44" height="52" transform="rotate(18 148 146)"/></g>
+      </svg>
+      <div class="shield"></div>
+      <div class="stars"><span style="left:0">★</span><span style="left:45%">★</span><span style="right:0">★</span></div>
+    </div></div>
+    <div class="role hidden" id="role1">防守</div>
+  </div>
+  <div id="hand"><svg viewBox="-40 -50 80 90"><use href="#handprint" x="-30" y="-40" width="60" height="70" fill="#ffd2a8" stroke="#12091c" stroke-width="3"/></svg></div>
+</div>
+
+<div id="idlehint">
+  <span class="title">空气巴掌对决</span>
+  <span class="en">AIR SLAP DUEL</span>
+  <span class="press" id="presshint">按 空格 开始</span>
+</div>
+<div id="announcer"></div>
+<div id="ko" class="hidden"><div class="k big red">K.O.</div><div class="winner" id="winner"></div><div class="again">按 空格 再来一局</div></div>
+
+<div id="bottom">
+  <div class="feed p1" id="feed0"></div>
+  <div id="controls">
+    <button class="primary" data-cmd="start">开始<kbd>␣</kbd></button>
+    <button data-cmd="reset">重置<kbd>R</kbd></button>
+    <button id="mute">音效 开<kbd>M</kbd></button>
+    <button id="fs">全屏<kbd>F</kbd></button>
+  </div>
+  <div class="feed p2" id="feed1"></div>
+</div>
+<div id="toast"></div>
+<div id="offline" class="hidden">与 web_dashboard.py 的连接中断，正在重连…</div>
+
+<script>
+"use strict";
+// Must match firmware/libraries/SlapCommon/src/slap_game_config.h
+const ATTACK_TIMEOUT_MS = 5000;
+
+const $ = (id) => document.getElementById(id);
+const CLS = { forehand: "正手", backhand: "反手", feint: "假动作", dodge_left: "左闪", dodge_right: "右闪", block: "格挡", background: "背景" };
+const OUTCOME = {
+  HIT:            { text: "命中!",       cls: "red" },
+  JUMPED:         { text: "抢跑!",       cls: "red",  sub: "动得太早，照吃" },
+  GRAZE:          { text: "擦过",        cls: "grey", sub: "闪错方向" },
+  MISS:           { text: "闪开!",       cls: "cyan" },
+  BLOCKED:        { text: "格挡",        cls: "blue", sub: "伤害减半" },
+  COUNTERED:      { text: "反击!!",      cls: "" },
+  FEINT_PUNISHED: { text: "假动作暴击!!", cls: "pink" },
+  FEINT_FOOLED:   { text: "被骗了!",     cls: "pink", sub: "下回合防守窗口缩短" },
+  FEINT_HELD:     { text: "没上当",      cls: "cyan" },
+  TIMEOUT:        { text: "时间到",      cls: "grey", sub: "换人" },
+};
+const STRENGTH = { light: 0.55, medium: 0.8, heavy: 1.15 };
+
+const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false };
+
+/* ---------------- sound (synthesised, no files) ---------------- */
+const Sfx = {
+  ctx: null, muted: false,
+  wake() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+    if (this.ctx.state === "suspended") this.ctx.resume();
+  },
+  ok() { return this.ctx && !this.muted && this.ctx.state === "running"; },
+  gain(t, peak, dur) {
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(this.ctx.destination);
+    return g;
+  },
+  noise(dur) {
+    const c = this.ctx, n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(); s.buffer = b; return s;
+  },
+  slap(k = 1) {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime;
+    const n = this.noise(0.25), f = c.createBiquadFilter();
+    f.type = "bandpass"; f.frequency.value = 1800; f.Q.value = 0.8;
+    n.connect(f); f.connect(this.gain(t, 0.9 * k, 0.16)); n.start(t);
+    const o = c.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.18);
+    o.connect(this.gain(t, 0.7 * k, 0.22)); o.start(t); o.stop(t + 0.25);
+  },
+  whoosh() {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime, n = this.noise(0.4), f = c.createBiquadFilter();
+    f.type = "bandpass"; f.Q.value = 2;
+    f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(3000, t + 0.3);
+    n.connect(f); f.connect(this.gain(t, 0.35, 0.32)); n.start(t);
+  },
+  block() {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime;
+    [523, 784, 1046].forEach((fr, i) => {
+      const o = c.createOscillator(); o.type = "triangle"; o.frequency.value = fr;
+      o.connect(this.gain(t, 0.22 / (i + 1), 0.5)); o.start(t); o.stop(t + 0.55);
+    });
+    this.slap(0.35);
+  },
+  beep(fr, dur = 0.15, type = "square", vol = 0.12) {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime, o = c.createOscillator();
+    o.type = type; o.frequency.value = fr; o.connect(this.gain(t, vol, dur)); o.start(t); o.stop(t + dur + 0.05);
+  },
+  fight() { this.beep(392, 0.12); setTimeout(() => this.beep(587, 0.12), 110); setTimeout(() => this.beep(784, 0.35), 220); },
+  gong() {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime;
+    [[98, 0.6], [196, 0.3], [293, 0.15], [415, 0.08]].forEach(([fr, v]) => {
+      const o = c.createOscillator(); o.type = "sine"; o.frequency.value = fr;
+      o.connect(this.gain(t, v, 3.2)); o.start(t); o.stop(t + 3.3);
+    });
+  },
+};
+
+/* ---------------- helpers ---------------- */
+function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function center(el) { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.45, w: r.width }; }
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2200); }
+function playerOf(name) { if (/P2|DEF/.test(name)) return 1; return 0; }
+
+function announce(text, cls = "", sub = "", hold = 1100) {
+  const a = $("announcer");
+  a.innerHTML = "";
+  const big = document.createElement("span");
+  big.className = "big " + cls; big.textContent = text;
+  a.appendChild(big);
+  if (sub) { const s = document.createElement("span"); s.className = "sub"; s.textContent = sub; a.appendChild(s); }
+  big.animate([
+    { transform: "scale(2.6) skewX(-12deg)", opacity: 0 },
+    { transform: "scale(.92) skewX(-12deg)", opacity: 1, offset: 0.35 },
+    { transform: "scale(1) skewX(-12deg)", opacity: 1 },
+  ], { duration: 320, easing: "cubic-bezier(.2,.9,.3,1.3)", fill: "forwards" });
+  clearTimeout(announce.h);
+  announce.h = setTimeout(() => {
+    a.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-3vh)" }], { duration: 250, fill: "forwards" })
+      .onfinish = () => { if (a.firstChild === big) a.innerHTML = ""; a.getAnimations().forEach(x => x.cancel()); };
+  }, hold);
+}
+
+function setHp(hp, animate = true) {
+  for (const i of [0, 1]) {
+    const v = Math.max(0, Math.min(100, hp[i]));
+    const bar = $("bar" + i), fill = bar.querySelector(".fill"), trail = bar.querySelector(".trail");
+    if (!animate) { trail.style.transition = fill.style.transition = "none"; }
+    fill.style.width = v + "%";
+    trail.style.width = v + "%";
+    if (!animate) { void bar.offsetWidth; trail.style.transition = fill.style.transition = ""; }
+    bar.classList.toggle("low", v > 0 && v <= 30);
+    $("hpn" + i).textContent = v;
+  }
+  S.hp = hp.slice();
+}
+
+function setRoles() {
+  const show = !S.over && S.state !== "IDLE" && S.round > 0;
+  for (const i of [0, 1]) {
+    const r = $("role" + i);
+    r.classList.toggle("hidden", !show);
+    const atk = i === S.attacker;
+    r.textContent = atk ? "进攻" : "防守";
+    r.className = "role " + (atk ? "atk" : "def") + (show ? "" : " hidden");
+  }
+}
+
+function shake(k) {
+  const a = $("stage");
+  const px = 6 + 22 * k;
+  a.animate([
+    { transform: "translate(0,0)" }, { transform: `translate(${-px}px,${px * 0.4}px)` },
+    { transform: `translate(${px * 0.8}px,${-px * 0.5}px)` }, { transform: `translate(${-px * 0.5}px,${px * 0.3}px)` },
+    { transform: `translate(${px * 0.3}px,0)` }, { transform: "translate(0,0)" },
+  ], { duration: 260 + 200 * k, easing: "ease-out" });
+}
+
+function flash(v = 0.75) { $("flash").animate([{ opacity: v }, { opacity: 0 }], { duration: 260, easing: "ease-out" }); }
+function speedlines() { $("speedlines").animate([{ opacity: 0.9, transform: "scale(1.08) rotate(0deg)" }, { opacity: 0, transform: "scale(1) rotate(4deg)" }], { duration: 450, easing: "ease-out" }); }
+
+function sparks(x, y, n, color) {
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement("div");
+    s.className = "spark"; s.style.left = x + "px"; s.style.top = y + "px"; s.style.setProperty("--c", color);
+    document.body.appendChild(s);
+    const ang = Math.random() * Math.PI * 2, d = 60 + Math.random() * 160;
+    s.animate([
+      { transform: "translate(0,0) scale(1.4)", opacity: 1 },
+      { transform: `translate(${Math.cos(ang) * d}px,${Math.sin(ang) * d}px) scale(0)`, opacity: 0 },
+    ], { duration: 420 + Math.random() * 260, easing: "cubic-bezier(.1,.8,.3,1)" }).onfinish = () => s.remove();
+  }
+}
+
+function popDamage(i, dmg, label, crit) {
+  if (!dmg) return;
+  const c = center($("f" + i));
+  const d = document.createElement("div");
+  d.className = "dmg" + (crit ? " crit" : "");
+  d.innerHTML = `-${dmg}${label ? `<small>${label}</small>` : ""}`;
+  d.style.left = c.x + (i ? 1 : -1) * c.w * 0.35 + "px"; d.style.top = c.y - c.w * 0.3 + "px";
+  document.body.appendChild(d);
+  d.animate([
+    { transform: "translate(-50%,-50%) scale(.3)", opacity: 0 },
+    { transform: "translate(-50%,-80%) scale(1.25)", opacity: 1, offset: 0.2 },
+    { transform: "translate(-50%,-120%) scale(1)", opacity: 1, offset: 0.7 },
+    { transform: "translate(-50%,-170%) scale(.9)", opacity: 0 },
+  ], { duration: 1300, easing: "ease-out" }).onfinish = () => d.remove();
+}
+
+// Palm flies from `from`'s side to `to`'s cheek. Returns ms until contact.
+function swing(from, to, connects = true) {
+  const h = $("hand"), a = center($("f" + from)), b = center($("f" + to));
+  const hw = h.getBoundingClientRect().width || 120, dir = to > from ? 1 : -1;
+  const x0 = a.x + dir * a.w * 0.3 - hw / 2, x1 = b.x - dir * b.w * (connects ? 0.28 : -0.25) - hw / 2;
+  const y = b.y - hw * 0.15;
+  h.animate([
+    { transform: `translate(${x0}px,${y - hw * 0.4}px) rotate(${-60 * dir}deg) scaleX(${dir})`, opacity: 0 },
+    { transform: `translate(${x0}px,${y - hw * 0.3}px) rotate(${-50 * dir}deg) scaleX(${dir})`, opacity: 1, offset: 0.15 },
+    { transform: `translate(${x1}px,${y}px) rotate(${10 * dir}deg) scaleX(${dir})`, opacity: 1, offset: 0.6 },
+    { transform: `translate(${x1 + dir * hw * 0.6}px,${y + hw * 0.1}px) rotate(${30 * dir}deg) scaleX(${dir})`, opacity: 0 },
+  ], { duration: 360, easing: "cubic-bezier(.5,0,.6,1)" });
+  return 210;
+}
+
+function snap(i, k) {
+  const f = $("f" + i), body = f.querySelector(".body"), dir = i === 1 ? 1 : -1;
+  body.animate([
+    { transform: "none" },
+    { transform: `translateX(${dir * 22 * k}%) rotate(${dir * 28 * k}deg)`, offset: 0.12 },
+    { transform: `translateX(${dir * 14 * k}%) rotate(${dir * 18 * k}deg)`, offset: 0.4 },
+    { transform: "none" },
+  ], { duration: 650 + 250 * k, easing: "cubic-bezier(.2,.9,.3,1)" });
+  restart(f, "ouch");
+  clearTimeout(f.ouchH); f.ouchH = setTimeout(() => f.classList.remove("ouch"), 1000);
+  const p = f.querySelector(i === 1 ? ".print-l" : ".print-r");   // the cheek facing the slapper
+  p.classList.add("show"); void p.offsetWidth; setTimeout(() => p.classList.remove("show"), 900);
+}
+
+function dodge(i, cls) {
+  const body = $("f" + i).querySelector(".body");
+  const dir = cls === "dodge_left" ? -1 : 1;
+  body.animate([
+    { transform: "none" }, { transform: `translateX(${dir * 45}%) rotate(${dir * 8}deg)`, offset: 0.25 },
+    { transform: `translateX(${dir * 40}%) rotate(${dir * 6}deg)`, offset: 0.6 }, { transform: "none" },
+  ], { duration: 700, easing: "cubic-bezier(.2,.9,.3,1)" });
+}
+
+function guard(i) {
+  $("f" + i).querySelector(".shield").animate([
+    { opacity: 0, transform: "scale(.7)" }, { opacity: 1, transform: "scale(1.05)", offset: 0.25 }, { opacity: 0, transform: "scale(1.15)" },
+  ], { duration: 650, easing: "ease-out" });
+}
+
+function confuse(i) {
+  $("f" + i).querySelector(".body").animate([
+    { transform: "none" }, { transform: "rotate(-8deg)" }, { transform: "rotate(8deg)" }, { transform: "rotate(-5deg)" }, { transform: "none" },
+  ], { duration: 700 });
+}
+
+function impact(def, k, crit, color = "#ffd23f") {
+  snap(def, k);
+  const c = center($("f" + def));
+  sparks(c.x - (def ? 1 : -1) * c.w * 0.3, c.y, Math.round(10 + 14 * k), color);
+  shake(k);
+  Sfx.slap(k);
+  if (k >= 1 || crit) { flash(crit ? 0.9 : 0.6); speedlines(); }
+}
+
+/* ---------------- referee messages ---------------- */
+function onResult(m, animate) {
+  const atk = m.attacker, def = atk ^ 1, k = STRENGTH[m.strength] || 0.8;
+  const o = OUTCOME[m.outcome] || { text: m.outcome, cls: "" };
+  if (!animate) { setHp(m.hp, false); return; }
+  const delta = m.delta_ms ? `Δ ${m.delta_ms} ms` : "";
+  switch (m.outcome) {
+    case "HIT": case "JUMPED": {
+      const t = swing(atk, def);
+      setTimeout(() => { impact(def, k, false); setHp(m.hp); popDamage(def, m.damage, m.strength === "heavy" ? "重击" : ""); }, t);
+      announce(m.strength === "heavy" && m.outcome === "HIT" ? "重击!" : o.text, o.cls, o.sub || delta);
+      break;
+    }
+    case "FEINT_PUNISHED": {
+      const t = swing(atk, def);
+      setTimeout(() => { impact(def, 1.2, true, "#ff6cf0"); setHp(m.hp); popDamage(def, m.damage, "暴击", true); }, t);
+      announce(o.text, o.cls, "上当后挨了真巴掌");
+      break;
+    }
+    case "GRAZE": {
+      dodge(def, m.defense);
+      const t = swing(atk, def);
+      setTimeout(() => { impact(def, 0.4, false); setHp(m.hp); popDamage(def, m.damage, "擦过"); }, t);
+      announce(o.text, o.cls, o.sub);
+      break;
+    }
+    case "BLOCKED": {
+      const t = swing(atk, def);
+      setTimeout(() => { guard(def); Sfx.block(); shake(0.3); setHp(m.hp); popDamage(def, m.damage, "格挡"); }, t);
+      announce(o.text, o.cls, o.sub);
+      break;
+    }
+    case "MISS": {
+      dodge(def, m.defense); swing(atk, def, false); Sfx.whoosh();
+      announce(o.text, o.cls, delta);
+      break;
+    }
+    case "COUNTERED": {
+      dodge(def, m.defense); swing(atk, def, false); Sfx.whoosh();
+      setTimeout(() => {
+        const t = swing(def, atk);
+        setTimeout(() => { impact(atk, 1.1, true); setHp(m.hp); popDamage(atk, m.counter_damage, "反击", true); }, t);
+      }, 420);
+      announce(o.text, o.cls, `玩家${def + 1} 闪开后反打`, 1400);
+      break;
+    }
+    case "FEINT_FOOLED": case "FEINT_HELD":
+      confuse(def); setHp(m.hp); announce(o.text, o.cls, o.sub);
+      break;
+    default:
+      setHp(m.hp); Sfx.beep(220, 0.3, "sawtooth", 0.08); announce(o.text, o.cls, o.sub);
+  }
+}
+
+function onGameOver(m, animate) {
+  S.over = true;
+  setHp(m.hp, animate);
+  const loser = m.winner ^ 1;
+  const show = () => {
+    $("f" + loser).classList.add("ko");
+    $("winner").innerHTML = `<span style="color:var(--${m.winner ? "p2" : "p1"})">玩家${m.winner + 1}</span> 胜利`;
+    $("ko").classList.remove("hidden");
+    if (animate) {
+      $("ko").querySelector(".k").animate([{ transform: "scale(3) rotate(-8deg)", opacity: 0 }, { transform: "scale(1) rotate(-4deg)", opacity: 1 }],
+        { duration: 450, easing: "cubic-bezier(.2,.9,.3,1.4)", fill: "forwards" });
+      flash(1); shake(1.3); Sfx.gong();
+    }
+    setRoles();
+  };
+  if (animate) setTimeout(show, 900); else show();
+}
+
+function resetBoard() {
+  S.over = false; S.round = 0; S.deadline = 0;
+  $("roundbadge").textContent = "READY";
+  $("ko").classList.add("hidden");
+  $("f0").classList.remove("ko"); $("f1").classList.remove("ko");
+  setHp([100, 100], false);
+}
+
+function handle(m, animate = true) {
+  switch (m.type) {
+    case "peer": {
+      const i = playerOf(m.name), dot = $("dot" + i), was = dot.classList.contains("on");
+      dot.classList.toggle("on", !!m.connected);
+      $("dev" + i).textContent = m.name + (m.connected ? "" : " 离线");
+      if (animate && was !== !!m.connected) toast(`${m.name} ${m.connected ? "已连接" : "断开"}`);
+      break;
+    }
+    case "state":
+      S.state = m.state;
+      if (m.state === "IDLE") resetBoard();
+      if (m.state === "ARMED" && !S.deadline) S.deadline = performance.now() + ATTACK_TIMEOUT_MS;
+      S.judging = m.state === "JUDGING";
+      if (m.state !== "ARMED" && m.state !== "JUDGING") S.deadline = 0;
+      $("idlehint").classList.toggle("hidden", m.state !== "IDLE");
+      setRoles();
+      break;
+    case "announce":
+      if (m.round === 1) resetBoard();
+      S.round = m.round; S.attacker = m.attacker; S.deadline = 0;
+      $("roundbadge").textContent = "ROUND " + m.round;
+      $("idlehint").classList.add("hidden");
+      setRoles();
+      if (animate) {
+        if (m.round === 1) {
+          announce("ROUND 1", "", "", 900); Sfx.beep(440, 0.2);
+          setTimeout(() => { announce("FIGHT!", "red", `玩家${m.attacker + 1} 先攻`, 900); Sfx.fight(); }, 1050);
+        } else {
+          announce("ROUND " + m.round, "", `玩家${m.attacker + 1} 进攻`, 1300); Sfx.beep(440, 0.2);
+        }
+      }
+      break;
+    case "result": onResult(m, animate); break;
+    case "game_over": onGameOver(m, animate); break;
+    case "event": if (animate) addEvent(m); break;
+    case "snapshot":
+      for (const x of m.items) handle(x, false);
+      break;
+  }
+}
+
+function addEvent(m) {
+  const i = playerOf(m.from), feed = $("feed" + i);
+  const e = document.createElement("div");
+  e.className = "evt";
+  const pct = Math.round((m.conf / 255) * 100);
+  e.innerHTML = `<b>${CLS[m.cls] || m.cls}</b><span>${pct}%</span><span>${m.peak}°/s</span><span class="lat">延迟 ${m.rx - m.t} ms</span>`;
+  feed.appendChild(e);
+  while (feed.children.length > 3) feed.firstChild.remove();
+  if (m.cls === "forehand" || m.cls === "backhand") Sfx.beep(880, 0.04, "square", 0.04);
+}
+
+/* ---------------- timer loop ---------------- */
+const ring = document.querySelector("#timer .ring"), CIRC = 263.9;
+function tick() {
+  const t = $("timer"), num = $("timernum");
+  if (S.deadline) {
+    const left = Math.max(0, S.deadline - performance.now());
+    t.classList.remove("idle");
+    t.classList.toggle("urgent", left < 1500 && !S.judging);
+    t.classList.toggle("judging", S.judging);
+    num.textContent = S.judging ? "判定" : Math.ceil(left / 1000);
+    ring.style.strokeDashoffset = CIRC * (1 - left / ATTACK_TIMEOUT_MS);
+  } else {
+    t.classList.add("idle"); t.classList.remove("urgent", "judging");
+    ring.style.strokeDashoffset = 0;
+    num.textContent = S.over ? "K.O." : S.state === "IDLE" ? "待机" : S.state === "ANNOUNCE" ? "准备" : "—";
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ---------------- commands ---------------- */
+async function send(cmd) {
+  Sfx.wake();
+  try {
+    const r = await fetch("/cmd", { method: "POST", body: cmd });
+    if (r.status === 409) toast("当前数据来源不接受指令（stdin / 回放）");
+  } catch (e) { toast("送不出指令：后端没开？"); }
+}
+document.querySelectorAll("[data-cmd]").forEach(b => b.addEventListener("click", () => send(b.dataset.cmd)));
+function toggleMute() { Sfx.wake(); Sfx.muted = !Sfx.muted; $("mute").firstChild.textContent = Sfx.muted ? "音效 关" : "音效 开"; }
+function toggleFs() { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
+$("mute").addEventListener("click", toggleMute);
+$("fs").addEventListener("click", toggleFs);
+document.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); send("start"); }
+  else if (e.code === "KeyR") send("reset");
+  else if (e.code === "KeyM") toggleMute();
+  else if (e.code === "KeyF") toggleFs();
+});
+document.addEventListener("pointerdown", () => Sfx.wake(), { once: true });
+
+/* ---------------- stream ---------------- */
+function connect() {
+  const es = new EventSource("/events");
+  es.onopen = () => $("offline").classList.add("hidden");
+  es.onmessage = (ev) => { try { handle(JSON.parse(ev.data)); } catch (e) { console.error(e, ev.data); } };
+  es.onerror = () => { $("offline").classList.remove("hidden"); };
+}
+// Real copies, not <use>: CSS (.ouch / .ko / team colours) can't reach into a <use> shadow tree.
+document.querySelectorAll(".facewrap").forEach(w => { for (const c of $("facebase").children) w.appendChild(c.cloneNode(true)); });
+setHp([100, 100], false);
+connect();
+</script>
+</body>
+</html>

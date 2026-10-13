@@ -90,7 +90,7 @@ firmware/
     standalone/               独立测试固件：第 1–2 周验证 BLE 可行性
     xiaozhi_glue/             接进 xiaozhi-esp32 的胶水代码（表情、MCP 语音指令）
 ml/                         训练、量化、导出 model.h、窗口扫描
-tools/                      采集、BLE 监看、比赛 dashboard、实验分析、合成数据
+tools/                      采集、BLE 监看、比赛 dashboard（终端 / 网页对战画面）、模拟比赛、实验分析、合成数据
 tests/                      裁判核心的单元测试（PC 上跑）
 data/                       原始 CSV（只用受试者代号）
 ```
@@ -122,6 +122,14 @@ arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/
 
 # 5. 没有裁判时先用笔电看事件
 python tools/ble_monitor.py
+```
+
+**比赛画面（demo 投影用）**：格斗游戏风格的网页，血条、出手动画、命中特效、K.O.，音效现场合成，不需要联网。
+空格开局、R 重置、M 静音、F 全屏，按钮与按键会把指令送回裁判。
+
+```bash
+python tools/web_dashboard.py --port COM5     # 接小智裁判（standalone）或 nano_hub
+make -C tests sim && python tools/web_dashboard.py --sim   # 没有硬件：模拟比赛，按空格开一场
 ```
 
 还没有数据时，可以先用合成数据把整条 pipeline 跑一遍：

@@ -129,7 +129,8 @@ int main(int argc, char** argv) {
     }
   }
   rng.seed(seed);
-  std::setvbuf(stdout, nullptr, _IOLBF, 0);
+  // Unbuffered: the Windows CRT treats _IOLBF as full buffering, which stalls --realtime pipes.
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
 
   Json out;
   RefereeCore ref(&out);
@@ -155,6 +156,7 @@ int main(int argc, char** argv) {
       i = 0;  // the callback may have cleared or changed the queue
     }
     ref.tick(g_now);
+    if (std::ferror(stdout)) return 0;  // reader went away (dashboard closed)
     g_now += kStep;
     if (realtime) {
       wall += std::chrono::milliseconds(kStep);
