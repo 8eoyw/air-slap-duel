@@ -10,8 +10,10 @@ Standard library only (pyserial for --port).
     build/sim_match --realtime | python tools/web_dashboard.py --stdin
     python tools/web_dashboard.py --replay results/match1.jsonl
     python tools/web_dashboard.py --port COM5 --host 0.0.0.0   # open from a phone / other PC
+    python tools/web_dashboard.py                           # auto: ESP32 port if one is plugged in, else --sim
 
 Then open http://127.0.0.1:8765 (done automatically unless --no-browser).
+Also packaged as a single exe (PyInstaller), which runs in the auto mode when double-clicked.
 """
 import argparse
 import json
@@ -25,7 +27,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = Path(__file__).resolve().parent / "web" / "index.html"
+# Inside a PyInstaller exe the page and the simulator are unpacked under sys._MEIPASS.
+BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
+PAGE = BUNDLE / "tools" / "web" / "index.html"
+SIM_EXE = BUNDLE / "build" / ("sim_match.exe" if sys.platform == "win32" else "sim_match")
+# USB-serial bridges seen on referee boards: CH340 (Goouuu S3-CAM TTL port), Espressif native USB, CP210x.
+REFEREE_VIDS = {0x1A86, 0x303A, 0x10C4}
 COMMANDS = {"start", "reset", "announce_done", "swap_done", "status",
             "left1", "right1", "left2", "right2"}
 
@@ -103,7 +110,7 @@ class SimSource:
     """Runs build/sim_match --realtime; 'start' begins a fresh match."""
 
     def __init__(self, hub, latency):
-        exe = ROOT / "build" / ("sim_match.exe" if sys.platform == "win32" else "sim_match")
+        exe = SIM_EXE
         if not exe.exists():
             sys.exit(f"{exe} not found: build it with  make -C tests sim")
         self.exe, self.hub, self.latency = exe, hub, latency
@@ -130,7 +137,8 @@ class SimSource:
                 self.hub.publish({"type": "state", "state": "IDLE"})
                 return True
             self.proc = subprocess.Popen([str(self.exe), "--realtime", "--latency", str(self.latency)],
-                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             proc = self.proc
         threading.Thread(target=self.read, args=(proc,), daemon=True).start()
         return True
@@ -228,9 +236,26 @@ def make_handler(hub, source):
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    # On Windows SO_REUSEADDR lets a second server bind the same port, hiding that one is already running.
+    allow_reuse_address = sys.platform != "win32"
+
+
+def find_referee_port():
+    try:
+        from serial.tools import list_ports
+    except ImportError:
+        return None
+    for p in list_ports.comports():
+        if p.vid in REFEREE_VIDS:
+            return p.device
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
-    g = ap.add_mutually_exclusive_group(required=True)
+    g = ap.add_mutually_exclusive_group()  # none given -> auto
     g.add_argument("--port", help="serial port of the referee (ESP32 standalone or nano_hub)")
     g.add_argument("--sim", action="store_true", help="simulated matches (build/sim_match)")
     g.add_argument("--stdin", action="store_true", help="JSON lines on stdin")
@@ -243,6 +268,19 @@ def main():
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
 
+    url = f"http://127.0.0.1:{args.http_port}/"
+    try:
+        server = Server((args.host, args.http_port), None)
+    except OSError:  # already running (e.g. the exe double-clicked twice): just show it
+        print(f"{url} is already in use; opening it", file=sys.stderr)
+        if not args.no_browser:
+            webbrowser.open(url)
+        return
+    if not (args.port or args.sim or args.stdin or args.replay):
+        args.port = find_referee_port()
+        args.sim = args.port is None
+        print(f"auto: {'referee on ' + args.port if args.port else 'no referee board found, simulated matches'}",
+              file=sys.stderr)
     if args.log:
         args.log.parent.mkdir(parents=True, exist_ok=True)
     hub = Hub(args.log)
@@ -253,10 +291,8 @@ def main():
     else:
         source = StreamSource(hub, args.replay, args.fast)
 
-    server = ThreadingHTTPServer((args.host, args.http_port), make_handler(hub, source))
-    server.daemon_threads = True
-    url = f"http://127.0.0.1:{args.http_port}/"
-    print(f"match screen: {url}  (Ctrl+C to stop)", file=sys.stderr)
+    server.RequestHandlerClass = make_handler(hub, source)
+    print(f"match screen: {url}  (close this window or Ctrl+C to stop)", file=sys.stderr)
     if not args.no_browser:
         threading.Timer(0.5, webbrowser.open, args=(url,)).start()
     try:

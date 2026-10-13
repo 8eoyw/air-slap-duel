@@ -132,6 +132,10 @@ python tools/web_dashboard.py --port COM5     # 接小智裁判（standalone）�
 make -C tests sim && python tools/web_dashboard.py --sim   # 没有硬件：模拟比赛，按空格开一场
 ```
 
+不带参数时自动判断：插着裁判板（CH340 / ESP32 USB / CP210x）就接它，没有就进模拟模式。
+打包成单一 exe（双击即用，Windows）：先用 `-static` 编 `build/sim_match.exe`，再
+`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "build/sim_match.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
+
 还没有数据时，可以先用合成数据把整条 pipeline 跑一遍：
 `python tools/synth_data.py && cd ml && python train.py --task attacker --data ../data_synth`
 
