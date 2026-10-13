@@ -4,7 +4,11 @@
 // Both expose the same IMU.readAcceleration / IMU.readGyroscope API.
 #pragma once
 
-#define NANO_REV 2  // TODO: set to 1 or 2 after checking the board silkscreen
+// Our boards are Rev1 (I2C scan: LSM9DS1 at 0x6B/0x1E, HTS221 0x5F, LPS22HB 0x5C).
+// A Rev2 board can override at build time: --build-property "compiler.cpp.extra_flags=-DNANO_REV=2"
+#ifndef NANO_REV
+#define NANO_REV 1
+#endif
 
 #if NANO_REV == 1
   #include <Arduino_LSM9DS1.h>

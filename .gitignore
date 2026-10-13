@@ -15,3 +15,8 @@ sdkconfig.*
 !sdkconfig.defaults
 managed_components/
 dependencies.lock
+
+# Models are build products: copy them from ml/out/ (see README) instead of committing
+firmware/nano_player/*_model.h
+firmware/nano_attacker/model.h
+firmware/nano_defender/model.h

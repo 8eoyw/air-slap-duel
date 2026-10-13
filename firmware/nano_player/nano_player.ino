@@ -30,9 +30,10 @@ static_assert(slap_model_attacker::kHz == slap_model_defender::kHz,
 
 #ifdef SLAP_HAVE_MODELS
 #include <slap_classifier_tflm.h>
-// Two arenas of 40 KB; the boot log prints what each one really uses.
-SLAP_TFLM_INSTANCE(atkModel, slap_model_attacker, 40 * 1024);
-SLAP_TFLM_INSTANCE(defModel, slap_model_defender, 40 * 1024);
+// The default CNN uses ~6 KB of arena per model (boot log "INFO,arena_used=6084", 2026-10-13);
+// 12 KB leaves 2x headroom. A bigger model that fails begin() needs more here.
+SLAP_TFLM_INSTANCE(atkModel, slap_model_attacker, 12 * 1024);
+SLAP_TFLM_INSTANCE(defModel, slap_model_defender, 12 * 1024);
 
 static const SlapPipelineConfig kPipes[] = {
     {"atk", [](const float* w, uint8_t* c, uint8_t* f) { atkModel.classify(w, c, f); },
