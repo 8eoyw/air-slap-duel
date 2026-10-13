@@ -9,11 +9,20 @@
 //
 // Event latency (rx - t_onset) defaults to 515 ms, measured on a Nano 33 BLE Sense
 // running nano_player (1 s window, trigger in the middle) on 2026-10-13.
+//
+// --interactive: no scripted players; reads commands from stdin instead, so a person
+// can play both sides from the keyboard (tools/web_dashboard.py --keys):
+//   start | reset | ev <player 0/1> <class name> <peak dps>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
+#include <iostream>
+#include <mutex>
 #include <random>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -35,6 +44,29 @@ std::vector<Pending> g_queue;
 int g_latency = 515;
 bool g_announced = false;
 uint32_t g_announce_at = 0;
+bool g_interactive = false;
+
+// --interactive: stdin lines, filled by a reader thread, drained by the 10 ms loop.
+std::mutex g_in_mu;
+std::deque<std::string> g_in;
+bool g_in_eof = false;
+
+void readStdin() {
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    std::lock_guard<std::mutex> lk(g_in_mu);
+    g_in.push_back(line);
+  }
+  std::lock_guard<std::mutex> lk(g_in_mu);
+  g_in_eof = true;
+}
+
+int classFromName(const std::string& n) {
+  static const uint8_t all[] = {CLS_FOREHAND, CLS_BACKHAND, CLS_FEINT, CLS_DODGE_LEFT, CLS_DODGE_RIGHT, CLS_BLOCK};
+  for (uint8_t c : all)
+    if (n == slapClassName(c)) return c;
+  return -1;
+}
 
 int uni(int lo, int hi) { return std::uniform_int_distribution<int>(lo, hi)(rng); }
 bool chance(int pct) { return uni(0, 99) < pct; }
@@ -95,7 +127,7 @@ class Json : public RefereeOutput {
     std::printf("{\"type\":\"announce\",\"attacker\":%u,\"round\":%u}\n", attacker, round);
     g_announced = true;
     g_announce_at = g_now + 1200;  // pretend TTS takes 1.2 s
-    planRound(attacker, g_announce_at);
+    if (!g_interactive) planRound(attacker, g_announce_at);
   }
   void onResult(const RoundResult& r) override {
     static const char* str[] = {"light", "medium", "heavy"};
@@ -123,8 +155,9 @@ int main(int argc, char** argv) {
     if (!std::strcmp(argv[i], "--seed") && i + 1 < argc) seed = (unsigned)std::atoi(argv[++i]);
     else if (!std::strcmp(argv[i], "--realtime")) realtime = true;
     else if (!std::strcmp(argv[i], "--latency") && i + 1 < argc) g_latency = std::atoi(argv[++i]);
+    else if (!std::strcmp(argv[i], "--interactive")) g_interactive = realtime = true;
     else {
-      std::fprintf(stderr, "usage: sim_match [--seed N] [--realtime] [--latency MS]\n");
+      std::fprintf(stderr, "usage: sim_match [--seed N] [--realtime] [--latency MS] [--interactive]\n");
       return 2;
     }
   }
@@ -136,11 +169,45 @@ int main(int argc, char** argv) {
   RefereeCore ref(&out);
   ref.setPlayerBoards(true);
   for (const char* n : kNames) std::printf("{\"type\":\"peer\",\"name\":\"%s\",\"connected\":true}\n", n);
-  ref.start(g_now);
+  if (g_interactive) {
+    std::printf("{\"type\":\"state\",\"state\":\"IDLE\"}\n");
+    std::thread(readStdin).detach();
+  } else {
+    ref.start(g_now);
+  }
 
   const uint32_t kStep = 10, kLimit = 30 * 60 * 1000;  // give up after 30 simulated minutes
   auto wall = std::chrono::steady_clock::now();
-  while (ref.state() != REF_GAME_OVER && g_now < kLimit) {
+  while (g_interactive || (ref.state() != REF_GAME_OVER && g_now < kLimit)) {
+    if (g_interactive) {
+      std::deque<std::string> lines;
+      bool eof;
+      {
+        std::lock_guard<std::mutex> lk(g_in_mu);
+        lines.swap(g_in);
+        eof = g_in_eof;
+      }
+      for (const std::string& line : lines) {
+        std::istringstream in(line);
+        std::string cmd, name;
+        int player = -1, peak = 500;
+        in >> cmd;
+        if (cmd == "start") {  // also restarts a game in progress
+          if (ref.state() != REF_IDLE && ref.state() != REF_GAME_OVER) ref.reset();
+          g_queue.clear();
+          ref.start(g_now);
+        } else if (cmd == "reset") {
+          ref.reset();
+          g_queue.clear();
+          g_announced = false;
+          std::printf("{\"type\":\"state\",\"state\":\"IDLE\"}\n");
+        } else if (cmd == "ev" && (in >> player >> name >> peak) && (player == 0 || player == 1)) {
+          int cls = classFromName(name);
+          if (cls >= 0) push((uint8_t)player, g_now, (uint8_t)cls, (uint16_t)peak);
+        }
+      }
+      if (eof && lines.empty()) return 0;
+    }
     if (g_announced && g_now >= g_announce_at) {
       g_announced = false;
       ref.announceDone(g_now);
