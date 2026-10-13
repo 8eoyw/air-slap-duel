@@ -127,7 +127,7 @@ void handleCommand(String cmd, uint32_t now) {
   if (cmd == "start") ref.start(now);
   else if (cmd == "announce_done") ref.announceDone(now);
   else if (cmd == "swap_done") ref.swapDone(now);
-  else if (cmd == "reset") ref.reset();
+  else if (cmd == "reset") { ref.reset(); out.onState(REF_IDLE); }  // reset() is silent
   else if (cmd == "left1") ref.setLeftHanded(0, true);
   else if (cmd == "right1") ref.setLeftHanded(0, false);
   else if (cmd == "left2") ref.setLeftHanded(1, true);

@@ -58,7 +58,10 @@ void referee_task(void*) {
             case SLAP_CMD_START:         g_core->start(now); break;
             case SLAP_CMD_ANNOUNCE_DONE: g_core->announceDone(now); break;
             case SLAP_CMD_SWAP_DONE:     g_core->swapDone(now); break;
-            case SLAP_CMD_RESET:         g_core->reset(); break;
+            case SLAP_CMD_RESET:  // reset() is silent; tell the screens
+              g_core->reset();
+              if (g_fb) g_fb->onState(REF_IDLE);
+              break;
             case SLAP_CMD_LEFT_P1:       g_core->setLeftHanded(0, true); break;
             case SLAP_CMD_RIGHT_P1:      g_core->setLeftHanded(0, false); break;
             case SLAP_CMD_LEFT_P2:       g_core->setLeftHanded(1, true); break;
