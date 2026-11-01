@@ -1,321 +1,267 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="c">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>空气巴掌 · 绷不住大赛</title>
 <!--
   Served by tools/web_dashboard.py; listens to /events (SSE), posts commands to /cmd.
-  No external assets: works offline at the demo.
+  No external assets: fonts and characters are local, so it works offline at the demo.
 
-  Subject: 奶蛙 and the 奶家人 (奶茶, 奶狗, 豆奶) — the soft 3D AI-video characters of the 奶蛙 meme.
-  They are not redrawn: chars/ holds background-removed frames cut from the original videos
-  (sources and timestamps in chars/SOURCES.md, cut with tools/cut_chars.py). Their signature move
-  is 捧腹大笑 — head thrown back, mouth wide open, both hands on the belly, unable to stop.
-  Its internet vernacular: "我在绷不住大赛中坚持了XX秒", livestream 连麦 audio.
+  A fixed 1920×1080 stage scaled to the window (desktop or projector, no phone layout).
+  Three art directions over the same DOM, switched with T:
+    a 午夜决斗  black #0b0a09, warm spot #ffeccd · Noto Serif SC + Cormorant italic · letterbox HUD, hairline bars
+    b 拳赛海报  paper #efe6d2, vermilion #e4412a, ink #1f2a5a · ZCOOL QingKe + Anton · halftone discs, misregistered print
+    c 玩具展台  backdrop colour = what just happened (cobalt, tomato, emerald, cream) · Noto Sans SC + Archivo · type behind the toys
 
-  Concept: the duel is a 连麦 PK livestream. Two stream panels side by side; BLE link = 连麦中;
-  HP = 绷住值 on a PK tug bar; hits arrive as gift banners with combo counts; outcomes fly past as
-  danmaku; real sensor events land in the chat box. 绷住值 0 = 绷不住了: the loser laughs and can't stop.
-
-  Tokens
-    奶蛙黄 #F6C933  奶油肚 #FFF1D6  橄榄褐 #6E5530  眼白绿 #A8D27A  PK红 #FF3B6B  PK蓝 #2F80FF  夜 #1A1430
-    type   heavy YaHei for UI and danmaku; Arial Rounded for numbers; 幼圆 for soft captions
-    layout top bar (avatars · PK timer) → PK bar → two stream panels → chat · buttons · keys
-  stream panel: the streamer sits behind a desk, framed waist-up like a webcam (the source frames
-  are mostly waist-up shots, and the desk hides where they are cut off)
+  Characters are key poses from tools/gen_chars.py. Motion is pose-to-pose: a pose swap plus a fast move and a held
+  frame on contact, like a fighting game, rather than video. chars/manifest.json says which poses exist; a missing
+  pose falls back along FALLBACK, so new art only needs a reload.
 -->
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
-:root {
-  --frog: #f6c933;
-  --frog-hi: #ffe58a;
-  --frog-lo: #d39b17;
-  --belly: #fff1d6;
-  --olive: #6e5530;
-  --sclera: #a8d27a;
-  --red: #ff3b6b;
-  --blue: #2f80ff;
-  --night: #1a1430;
-  --ui: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  --num: "Arial Rounded MT Bold", "Arial Rounded MT", "Nunito", "Microsoft YaHei UI", sans-serif;
-  --soft: "YouYuan", "幼圆", "Yuanti SC", "Microsoft YaHei UI", sans-serif;
-}
+:root { --ui: "Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif; }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); color: #fff; font-family: var(--ui); }
-body { user-select: none; }
-button { font-family: inherit; }
-
-#app { position: fixed; inset: 0; display: grid; grid-template-rows: auto auto 1fr auto; gap: 1.2vh; padding: 2vh 2.2vw 2.2vh;
-  background:
-    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(255,59,107,.22), transparent 70%),
-    radial-gradient(ellipse 60% 50% at 80% 0%, rgba(47,128,255,.22), transparent 70%),
-    radial-gradient(circle at 50% 120%, rgba(246,201,51,.18), transparent 60%),
-    var(--night); }
-
-/* ---------- top bar ---------- */
-#top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1.5vw; }
-.host { display: flex; align-items: center; gap: .8vw; min-width: 0; }
-.host.p2 { flex-direction: row-reverse; text-align: right; }
-.avatar { position: relative; flex: none; width: clamp(40px, 4.4vw, 74px); aspect-ratio: 1; border-radius: 50%; background: var(--belly); overflow: hidden;
-  box-shadow: 0 0 0 3px var(--c), 0 0 18px var(--c); }
-.avatar img { position: absolute; max-width: none; }
-.host .avatar { cursor: pointer; }
-.host .who { min-width: 0; }
-.host .name { font-size: clamp(16px, 1.7vw, 30px); font-weight: 900; line-height: 1.1; }
-.host .meta { display: flex; gap: .5em; align-items: center; margin-top: .35vh; font-size: clamp(10px, .9vw, 15px); opacity: .85; }
-.host.p2 .meta { justify-content: flex-end; }
-.live { padding: .15em .6em; border-radius: 99px; font-weight: 700; background: rgba(255,255,255,.14); }
-.live.on { background: #2ad06b; color: #062b14; }
-.live.on::before { content: ""; display: inline-block; width: .5em; height: .5em; margin-right: .35em; border-radius: 50%; background: #062b14; animation: blip 1s infinite; vertical-align: .05em; }
-@keyframes blip { 50% { opacity: .2; } }
-.host .dev { font-family: var(--num); opacity: .7; }
-
-#pkbadge { position: relative; display: flex; flex-direction: column; align-items: center; }
-#pkbadge .pk { font: italic 900 clamp(24px, 3vw, 52px)/1 var(--num); letter-spacing: -.02em;
-  background: linear-gradient(90deg, var(--red) 0 50%, var(--blue) 50%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 0 rgba(0,0,0,.6)); }
-#pkbadge .clock { margin-top: .3vh; padding: .2em .9em; border-radius: 99px; background: rgba(0,0,0,.45); font-size: clamp(11px, 1vw, 17px); white-space: nowrap; }
-#pkbadge .clock b { font: clamp(13px, 1.25vw, 21px)/1 var(--num); color: var(--frog); margin: 0 .15em; }
-#pkbadge.urgent .clock b { color: var(--red); animation: blip .5s infinite; }
-
-/* ---------- PK bar (绷住值) ---------- */
-#pk { position: relative; height: clamp(22px, 3.4vh, 38px); border-radius: 99px; overflow: hidden; background: #2a2244; box-shadow: inset 0 2px 6px rgba(0,0,0,.6); }
-#pk .r, #pk .b { position: absolute; top: 0; bottom: 0; transition: width .35s cubic-bezier(.3,1.4,.5,1); }
-#pk .r { left: 0; background: linear-gradient(180deg, #ff7a98, var(--red) 55%, #c4123e); }
-#pk .b { right: 0; background: linear-gradient(180deg, #7fb2ff, var(--blue) 55%, #1652c4); }
-#pk .v { position: absolute; top: 50%; width: clamp(30px, 3.2vw, 54px); aspect-ratio: 1; transform: translate(-50%, -50%); transition: left .35s cubic-bezier(.3,1.4,.5,1);
-  display: grid; place-items: center; border-radius: 50%; background: var(--frog); color: var(--olive); font: italic 900 clamp(11px, 1vw, 17px)/1 var(--num);
-  box-shadow: 0 0 0 3px #fff, 0 0 14px #fff; }
-#pk .n { position: absolute; top: 50%; transform: translateY(-50%); font: clamp(12px, 1.2vw, 20px)/1 var(--num); text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
-#pk .n small { font: 700 .75em var(--ui); opacity: .9; margin: 0 .4em; }
-#pkn0 { left: 1.2em; }
-#pkn1 { right: 1.2em; }
-
-/* ---------- stream panels ---------- */
-#streams { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: .5vw; min-height: 0; }
-.panel { position: relative; overflow: hidden; border-radius: 20px; }
-#s0 { background: radial-gradient(ellipse 80% 70% at 50% 40%, #ffd3dc, #ff9db3 60%, #e0607f); }
-#s1 { background: radial-gradient(ellipse 80% 70% at 50% 40%, #d5e6ff, #93bcff 60%, #4f85e6); }
-.panel::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 24%;
-  background: linear-gradient(180deg, rgba(255,255,255,.0), rgba(255,255,255,.28)); }
-.panel::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 2px, transparent 2px 4px); }
-.tag { position: absolute; top: 1.4vh; z-index: 3; padding: .3em .8em; border-radius: 99px; background: rgba(0,0,0,.42);
-  font-size: clamp(10px, .95vw, 16px); font-weight: 700; }
-#s0 .tag { left: 1vw; }
-#s1 .tag { right: 1vw; }
-.role { position: absolute; top: 1.4vh; z-index: 3; padding: .3em .9em; border-radius: 99px; font-size: clamp(11px, 1.05vw, 18px); font-weight: 900; transition: opacity .2s; }
-#s0 .role { right: 1vw; }
-#s1 .role { left: 1vw; }
-.role.atk { background: var(--frog); color: var(--olive); }
-.role.def { background: #fff; color: var(--night); }
-.role.off { opacity: 0; }
-
-/* streamer: stacked frames of one character, only one visible at a time (no src swapping, so no decode flicker) */
-.streamer { position: absolute; inset: 0; z-index: 1; }
-.streamer .bob, .streamer .body { position: absolute; inset: 0; transform-origin: 50% 88%; }
-.streamer .bob { animation: jiggle 2.6s ease-in-out infinite; }
-#s1 .streamer .bob { animation-delay: -1.3s; }
-@keyframes jiggle { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, .992); } }
-.streamer img { position: absolute; left: 50%; max-width: none; transform: translateX(-50%) scaleX(var(--fx, 1)); opacity: 0; pointer-events: none;
-  filter: drop-shadow(0 1.4vh 1.6vh rgba(40, 10, 30, .35)); }
-.streamer img.still { opacity: 1; }
-.streamer.windup img.still { opacity: 0; }
-.streamer.windup img.windup { opacity: 1; }
-.streamer.laughing img.still, .streamer.laughing img.windup { opacity: 0; }
-.streamer.laughing img.laugh.on { opacity: 1; }
-.streamer.ouch img { filter: drop-shadow(0 1.4vh 1.6vh rgba(40, 10, 30, .35)) brightness(1.12) saturate(1.25) hue-rotate(-8deg); }
-.streamer.glow img { filter: drop-shadow(0 0 1.4vh #fff); }
-.streamer.lol .body { animation: lol .16s linear infinite; }
-@keyframes lol { 0% { transform: translate(0,0) rotate(0); } 25% { transform: translate(-1.2%,.6%) rotate(-1.5deg) scale(1.015,.98); } 50% { transform: translate(0,1.2%) rotate(0) scale(.99,1.02); } 75% { transform: translate(1.2%,.6%) rotate(1.5deg) scale(1.015,.98); } }
-.streamer.lol.bent .bob { transform: rotate(-5deg) translateY(2%); transition: transform .4s; animation: none; }
-#s1 .streamer.lol.bent .bob { transform: rotate(5deg) translateY(2%); }
-/* effects placed on the face by script */
-.fx { position: absolute; z-index: 3; pointer-events: none; transform: translate(-50%, -50%); }
-.print { width: clamp(40px, 5vw, 90px); opacity: 0; transition: opacity 1.6s ease-in; }
-.print.show { opacity: .75; transition: none; }
-.guardfx { display: flex; gap: .2vw; opacity: 0; transition: opacity .15s; }
-.guardfx svg { width: clamp(40px, 4.6vw, 84px); }
-.guardfx svg:last-child { transform: scaleX(-1); }
-.streamer.guarding ~ .guardfx { opacity: 1; }
-.stars { font: 900 clamp(18px, 2vw, 34px)/1 var(--num); color: var(--frog-hi); -webkit-text-stroke: 2px var(--olive); paint-order: stroke fill; opacity: 0; white-space: nowrap; }
-.streamer.dazed ~ .stars { opacity: 1; animation: orbit .9s linear infinite; }
-@keyframes orbit { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-/* the streamer's desk, in front of the character */
-.desk { position: absolute; left: 0; right: 0; bottom: 0; height: 12%; z-index: 2;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.0) 34%, rgba(0,0,0,.18) 35%, rgba(0,0,0,0) 48%),
-    repeating-linear-gradient(92deg, rgba(120,70,30,.0) 0 22px, rgba(120,70,30,.07) 22px 25px, rgba(120,70,30,0) 25px 61px),
-    linear-gradient(180deg, #fbe7c6 0, #ecc995 30%, #cf9e66 35%, #b07a48 70%, #93613a);
-  box-shadow: 0 -1.2vh 2.4vh rgba(40, 10, 30, .28); }
-.desk::before { content: ""; position: absolute; left: 6%; right: 6%; top: 0; height: 6%; border-radius: 0 0 50% 50%;
-  background: radial-gradient(ellipse at 50% 0, rgba(255,255,255,.75), transparent 70%); }
-.panel .light { position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 42% 46% at 50% 46%, rgba(255,255,255,.55), rgba(255,255,255,0) 70%),
-    radial-gradient(circle at 14% 22%, rgba(255,255,255,.35) 0 2.2%, transparent 2.6%),
-    radial-gradient(circle at 84% 30%, rgba(255,255,255,.28) 0 3.4%, transparent 3.9%),
-    radial-gradient(circle at 74% 14%, rgba(255,255,255,.22) 0 1.6%, transparent 2%),
-    radial-gradient(circle at 24% 58%, rgba(255,255,255,.18) 0 4.2%, transparent 4.8%),
-    radial-gradient(circle at 90% 62%, rgba(255,255,255,.2) 0 1.8%, transparent 2.2%),
-    radial-gradient(ellipse 90% 80% at 50% 45%, transparent 55%, rgba(30, 10, 40, .32)); filter: blur(1.5px); }
-
-.stamp { position: absolute; top: 74%; z-index: 6; transform: translate(-50%, -50%) rotate(-14deg); pointer-events: none;
-  width: clamp(80px, 9.5vw, 170px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
-  font: 900 clamp(36px, 4.8vw, 86px)/1 var(--ui); border: .4vw solid currentColor; }
-#s0 .stamp { left: 22%; }
-#s1 .stamp { left: 78%; }
-.stamp.win { color: var(--frog); background: rgba(110,85,48,.55); text-shadow: 0 3px 0 var(--olive); }
-.stamp.lose { color: #fff; background: rgba(26,20,48,.6); }
-
-/* danmaku */
-#danmaku { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; border-radius: 20px; }
-.dm { position: absolute; left: 100%; white-space: nowrap; font-weight: 900; font-size: clamp(15px, 1.7vw, 30px);
-  -webkit-text-stroke: 1px rgba(0,0,0,.55); paint-order: stroke fill; text-shadow: 0 2px 3px rgba(0,0,0,.45); }
-.dm.y { color: var(--frog-hi); }
-.dm.big { font-size: clamp(20px, 2.4vw, 42px); }
-
-/* gift banner */
-.gift { position: absolute; z-index: 8; top: 9vh; display: flex; align-items: center; gap: .6vw; padding: .4vw 1.6vw .4vw .4vw; border-radius: 99px;
-  background: linear-gradient(90deg, rgba(110,85,48,.92), rgba(110,85,48,.0)); white-space: nowrap; pointer-events: none; }
-#s1 .gift { flex-direction: row-reverse; padding: .4vw .4vw .4vw 1.6vw; background: linear-gradient(270deg, rgba(110,85,48,.92), rgba(110,85,48,0)); }
-#s0 .gift { left: .6vw; }
-#s1 .gift { right: .6vw; }
-.gift .avatar { width: clamp(30px, 3vw, 50px); box-shadow: 0 0 0 2px #fff; }
-.gift .txt { font-size: clamp(11px, 1vw, 17px); line-height: 1.3; }
-.gift .txt b { color: var(--frog); }
-.gift .item { width: clamp(30px, 3vw, 52px); }
-.gift .combo { font: italic clamp(26px, 3vw, 54px)/1 var(--num); color: var(--frog); -webkit-text-stroke: 2px var(--olive); paint-order: stroke fill; }
-.gift .combo small { font-size: .5em; margin-right: .05em; }
-
-/* call-outs */
-#call { position: absolute; left: 0; right: 0; top: 30%; z-index: 9; text-align: center; pointer-events: none; }
-#call .big { display: inline-block; padding: 0 .3em; font: 900 clamp(46px, 7.6vw, 140px)/1.05 var(--ui); color: var(--frog);
-  -webkit-text-stroke: clamp(3px, .4vw, 8px) var(--olive); paint-order: stroke fill; text-shadow: 0 .45vw 0 var(--olive), 0 .8vw 1.4vw rgba(0,0,0,.35); }
-#call .big.red { color: #ffe3ea; -webkit-text-stroke-color: #b0103a; text-shadow: 0 .45vw 0 #b0103a, 0 .8vw 1.4vw rgba(0,0,0,.35); }
-#call .big.blue { color: #e5f0ff; -webkit-text-stroke-color: #1652c4; text-shadow: 0 .45vw 0 #1652c4, 0 .8vw 1.4vw rgba(0,0,0,.35); }
-#call .big.grey { color: #f1eee6; -webkit-text-stroke-color: #5b5470; text-shadow: 0 .45vw 0 #5b5470; }
-#call .sub { display: inline-block; margin-top: 1vh; padding: .3em 1.1em; border-radius: 99px; background: rgba(26,20,48,.7); font: clamp(13px, 1.4vw, 24px)/1.3 var(--soft); font-weight: 700; }
-
-.dmg { position: fixed; z-index: 10; pointer-events: none; transform: translate(-50%, -50%); text-align: center;
-  font: clamp(36px, 5vw, 92px)/1 var(--num); color: #fff; -webkit-text-stroke: clamp(2px, .3vw, 5px) var(--red); paint-order: stroke fill; text-shadow: 0 .3vw 0 #8a0d2c; }
-.dmg.crit { color: var(--frog); -webkit-text-stroke-color: var(--olive); text-shadow: 0 .3vw 0 #3d2e18; }
-.dmg small { display: block; font: 900 .34em/1.5 var(--ui); }
-.pop { position: fixed; z-index: 10; pointer-events: none; font: 900 clamp(20px, 2.2vw, 40px)/1 var(--ui); color: #fff; -webkit-text-stroke: 2px var(--olive); paint-order: stroke fill; }
-#hand { position: fixed; left: 0; top: 0; z-index: 9; width: clamp(60px, 7vw, 130px); aspect-ratio: 1; opacity: 0; pointer-events: none; }
-#hand svg { width: 100%; height: 100%; overflow: visible; }
-#flash { position: fixed; inset: 0; z-index: 30; background: #fff7d6; opacity: 0; pointer-events: none; }
-
-/* idle + end */
-#idle { position: absolute; inset: 0; z-index: 9; display: grid; place-content: center; text-align: center; pointer-events: none; }
-#idle .t { font: 900 clamp(40px, 6.6vw, 124px)/1.05 var(--ui); color: var(--frog); -webkit-text-stroke: clamp(3px, .4vw, 8px) var(--olive); paint-order: stroke fill;
-  text-shadow: 0 .5vw 0 var(--olive), 0 1vw 2vw rgba(0,0,0,.4); }
-#idle .s { margin-top: 1.5vh; font: 700 clamp(14px, 1.6vw, 28px)/1.4 var(--soft); text-shadow: 0 2px 4px rgba(0,0,0,.6); }
-#idle .go { display: inline-block; margin-top: 3vh; padding: .5em 1.6em; border-radius: 99px; background: var(--red); font-weight: 900; font-size: clamp(14px, 1.5vw, 26px);
-  box-shadow: 0 .4vh 0 #9c0f33; animation: nudge 1.4s ease-in-out infinite; }
-@keyframes nudge { 50% { transform: scale(1.06); } }
-#end { position: absolute; inset: 0; z-index: 9; display: grid; place-content: center; text-align: center; pointer-events: none; }
-#end .t { font: 900 clamp(48px, 8vw, 150px)/1 var(--ui); color: var(--frog); -webkit-text-stroke: clamp(3px, .45vw, 9px) var(--olive); paint-order: stroke fill;
-  text-shadow: 0 .55vw 0 var(--olive), 0 1vw 2vw rgba(0,0,0,.45); }
-#end .s { display: inline-block; margin-top: 2vh; padding: .45em 1.3em; border-radius: 99px; background: rgba(26,20,48,.8); font: 700 clamp(14px, 1.7vw, 30px)/1.35 var(--soft); }
-#end .s b { font-family: var(--num); color: var(--frog); font-size: 1.25em; margin: 0 .15em; }
-#end .again { margin-top: 2.5vh; font-weight: 700; font-size: clamp(12px, 1.2vw, 20px); opacity: .85; text-shadow: 0 2px 4px #000; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: var(--ui); user-select: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 .hidden { display: none !important; }
 
-/* ---------- bottom ---------- */
-#bottom { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5vw; align-items: end; }
-#chat { display: flex; flex-direction: column; justify-content: flex-end; gap: .35vh; height: clamp(54px, 9vh, 110px); overflow: hidden; font-size: clamp(11px, .95vw, 16px);
-  mask-image: linear-gradient(180deg, transparent, #000 35%); -webkit-mask-image: linear-gradient(180deg, transparent, #000 35%); }
-.msg { align-self: flex-start; max-width: 100%; padding: .25em .75em; border-radius: 99px; background: rgba(255,255,255,.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: up .25s ease-out; }
-.msg .u { font-weight: 900; margin-right: .5em; }
-.msg .u.p0 { color: #ff9db3; }
-.msg .u.p1 { color: #93bcff; }
-.msg .d { font-family: var(--num); opacity: .7; margin-left: .4em; }
-@keyframes up { from { opacity: 0; transform: translateY(8px); } }
-#buttons { display: flex; gap: .8vw; }
-.btn { display: flex; flex-direction: column; align-items: center; gap: .4vh; background: none; border: 0; color: #fff; cursor: pointer; padding: 0; font-size: clamp(11px, .95vw, 16px); font-weight: 700; }
-.btn .ic { flex: none; width: clamp(40px, 3.8vw, 64px); height: clamp(40px, 3.8vw, 64px); border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12);
-  transition: transform .12s, background .15s; }
-.btn .ic svg { width: 46%; height: 46%; }
-.btn:hover .ic { background: rgba(255,255,255,.22); }
-.btn.main .ic { background: var(--frog); box-shadow: 0 .35vh 0 var(--frog-lo); }
-.btn.main .ic svg { color: var(--olive); }
-.btn:active .ic, .btn.press .ic { transform: scale(.9); }
-.btn:focus-visible .ic { outline: 3px solid #fff; outline-offset: 3px; }
-.btn.off .ic { opacity: .5; }
-#keys { justify-self: end; display: grid; grid-template-columns: auto repeat(6, auto); gap: .35vh .35vw; align-items: center; font-size: clamp(10px, .85vw, 14px); }
-#keys .who { font-weight: 900; padding-right: .3vw; }
-#keys .who.p0 { color: #ff9db3; }
-#keys .who.p1 { color: #93bcff; }
-#keys .k { display: flex; align-items: center; gap: .3em; padding: .2em .45em .2em .2em; border-radius: 99px; background: rgba(255,255,255,.08); white-space: nowrap; transition: background .1s; }
-#keys .k kbd { display: inline-grid; place-items: center; width: 1.8em; height: 1.8em; border-radius: 50%; background: var(--belly); color: var(--olive); font: 1em/1 var(--num); }
-#keys .k.hit { background: var(--frog); color: var(--olive); }
-#keys .hint { grid-column: 1 / -1; text-align: right; opacity: .65; font-family: var(--soft); font-weight: 700; }
-#toast { position: fixed; left: 50%; top: 2vh; transform: translateX(-50%); z-index: 40; padding: .45em 1.3em; border-radius: 99px; background: rgba(0,0,0,.75);
-  font-size: clamp(12px, 1vw, 16px); opacity: 0; transition: opacity .3s; pointer-events: none; }
+#view { position: fixed; inset: 0; display: grid; place-items: center; }
+#fit { overflow: hidden; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--bg); color: var(--fg); }
+.set { position: absolute; inset: 0; display: none; }
+.set i { position: absolute; display: block; }
+[data-theme=a] .set.a, [data-theme=b] .set.b, [data-theme=c] .set.c { display: block; }
+
+/* ---------- fighters: stacked poses, one visible, so a swap never waits on decoding ---------- */
+.fighter { position: absolute; bottom: var(--floor); width: 0; height: 0; z-index: 5; }
+.fighter.p0 { left: var(--x0); }
+.fighter.p1 { left: var(--x1); }
+.fighter .body { position: absolute; left: 0; bottom: 0; width: 0; height: 0; transform-origin: 0 0; animation: breathe 3.2s ease-in-out infinite; }
+.fighter.p1 .body { animation-delay: -1.6s; }
+@keyframes breathe { 50% { transform: scale(1.012, .99); } }
+.fighter img { position: absolute; bottom: 0; left: 0; height: calc(var(--h) * var(--k, 1)); max-width: none; opacity: 0; pointer-events: none; transform: translateX(-50%); }
+.fighter.p1 img { transform: translateX(-50%) scaleX(-1); }
+.fighter img.on { opacity: 1; }
+.fighter.lol .body { animation: lol .17s linear infinite; }
+@keyframes lol { 25% { transform: translate(-7px, 3px) rotate(-1.4deg); } 75% { transform: translate(7px, 3px) rotate(1.4deg); } }
+
+/* ---------- things every direction restyles ---------- */
+#hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.side, .mid { position: absolute; }
+.bar { position: relative; }
+.bar i { position: absolute; top: 0; bottom: 0; left: 0; width: var(--v, 100%); transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+.side.p1 .bar i { left: auto; right: 0; }
+.ticks { display: none; }
+.num, .who, .round, .clock, #sensor, #call .zh, #call .en, #title .zh { white-space: nowrap; }
+.link.off { color: #ff5a4f; opacity: 1; }
+.role { opacity: 0; transition: opacity .2s; }
+.role.show { opacity: 1; }
+
+#call { position: absolute; left: 0; right: 0; pointer-events: none; text-align: center; }
+#call .zh, #call .en, #call .sub, #title .zh, #title .en { display: block; }
+#title { position: absolute; left: 0; right: 0; pointer-events: none; text-align: center; }
+#sensor { position: absolute; z-index: 11; pointer-events: none; }
+.dmg { position: absolute; z-index: 9; pointer-events: none; transform: translate(-50%, -50%); white-space: nowrap; }
+.burst { position: absolute; z-index: 8; width: 420px; height: 420px; margin: -210px 0 0 -210px; pointer-events: none; opacity: 0;
+  clip-path: polygon(50% 0, 58% 34%, 86% 12%, 68% 42%, 100% 50%, 68% 58%, 86% 88%, 58% 66%, 50% 100%, 42% 66%, 14% 88%, 32% 58%, 0 50%, 32% 42%, 14% 12%, 42% 34%); }
+#flash { position: absolute; inset: 0; z-index: 20; opacity: 0; pointer-events: none; background: var(--flash, #fff); }
+
+/* roster, under each fighter while nobody is playing */
+.pick { position: absolute; z-index: 12; display: flex; gap: 10px; transform: translateX(-50%); }
+.pick.p0 { left: var(--x0); }
+.pick.p1 { left: var(--x1); }
+.pick button { width: 66px; height: 74px; display: grid; place-items: end center; opacity: .5; border-bottom: 4px solid transparent; transition: opacity .15s; }
+.pick button:hover { opacity: .85; }
+.pick button.on { opacity: 1; border-bottom-color: var(--fg); }
+.pick img { max-width: 58px; max-height: 66px; }
+#stage:not(.waiting) .pick { display: none; }
+
+/* the buttons only exist while the mouse moves; the key legend while waiting, or on H */
+#dock { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#stage:not(.mouse) #btns { display: none; }
+#stage:not(.waiting):not(.legend) #keys { display: none; }
+#btns { display: flex; gap: 6px; padding: 6px; background: rgba(12, 12, 16, .78); }
+#btns button { padding: 8px 15px; color: #f3f1ea; font-size: 21px; font-weight: 500; }
+#btns button:hover { background: rgba(255, 255, 255, .14); }
+#btns button kbd { font: inherit; opacity: .55; margin-left: .4em; }
+#btns button.off { opacity: .5; }
+#keys { display: grid; grid-template-columns: auto repeat(6, auto); gap: 4px 14px; padding: 10px 16px; background: rgba(12, 12, 16, .78); color: #f3f1ea; font-family: var(--ui); font-size: 21px; font-weight: 500; white-space: nowrap; }
+#keys b { font-weight: 900; }
+#keys .k { transition: color .1s; }
+#keys .k.hit { color: #ffd23f; }
+#keys kbd { font: 900 21px "Archivo", var(--ui); margin-right: .3em; }
+#keys .hint { grid-column: 1 / -1; opacity: .65; }
+#toast { position: absolute; left: 50%; top: 130px; transform: translateX(-50%); z-index: 40; padding: 10px 26px; background: rgba(12, 12, 16, .85); color: #f3f1ea; font-size: 24px; opacity: 0; transition: opacity .3s; pointer-events: none; }
 #toast.show { opacity: 1; }
-#offline { position: fixed; top: 0; left: 0; right: 0; z-index: 50; text-align: center; background: var(--red); padding: .3em; font-size: 14px; font-weight: 700; }
-@media (prefers-reduced-motion: reduce) { .streamer .bob, .live.on::before, #idle .go { animation: none; } }
+#offline { position: absolute; top: 0; left: 0; right: 0; z-index: 50; padding: 8px; text-align: center; background: #e4412a; color: #fff; font-size: 22px; font-weight: 500; }
+
+/* ---------- a 午夜决斗: the slap, shot like an art film ---------- */
+[data-theme=a] { --bg: #0b0a09; --fg: #f3ead9; --flash: #fff; --floor: 232px; --h: 560px; --x0: 560px; --x1: 1360px; }
+[data-theme=a] #stage { font-family: "Noto Serif SC", "Songti SC", SimSun, serif; }
+[data-theme=a] .fighter { filter: contrast(1.06) saturate(.9) brightness(.94); transition: filter .4s; }
+[data-theme=a] .fighter img { -webkit-box-reflect: below 0 linear-gradient(transparent 76%, rgba(255, 255, 255, .2)); }
+.a .spot { top: 60px; bottom: 96px; width: 900px; margin-left: -450px; filter: blur(30px); transition: opacity .35s; }
+.a .spot::before { content: ""; position: absolute; inset: 0; clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); background: linear-gradient(180deg, rgba(255, 236, 205, .22), rgba(255, 236, 205, .04)); }
+.a .pool { bottom: 170px; width: 760px; height: 120px; margin-left: -380px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 236, 205, .2), transparent); transition: opacity .35s; }
+.a .s0 { left: var(--x0); }
+.a .s1 { left: var(--x1); }
+.a .lb { left: 0; right: 0; height: 96px; background: #000; }
+.a .lb.t { top: 0; }
+.a .lb.b { bottom: 0; }
+[data-atk="0"][data-beat=armed] .a .s1, [data-atk="1"][data-beat=armed] .a .s0, [data-loser="1"] .a .s0, [data-loser="0"] .a .s1 { opacity: .12; }
+[data-theme=a] [data-loser="1"] .fighter.p0, [data-theme=a] [data-loser="0"] .fighter.p1 { filter: brightness(.26) saturate(.5); }
+[data-theme=a] .side { top: 0; height: 96px; width: 620px; display: flex; align-items: center; gap: 22px; }
+[data-theme=a] .side.p0 { left: 72px; }
+[data-theme=a] .side.p1 { right: 72px; flex-direction: row-reverse; }
+[data-theme=a] .who { font-weight: 500; font-size: 32px; letter-spacing: .3em; }
+[data-theme=a] .num { font: italic 500 46px/1 "Cormorant Garamond", serif; min-width: 64px; text-align: center; }
+[data-theme=a] .bar { flex: 1; height: 2px; background: #3a342c; }
+[data-theme=a] .bar i { background: var(--fg); }
+[data-theme=a] .meta { display: none; }
+[data-theme=a] .role { font-size: 24px; color: #b9ae9c; }
+[data-theme=a] .mid { top: 0; left: 0; right: 0; height: 96px; display: flex; align-items: center; justify-content: center; gap: 18px; }
+[data-theme=a] .title { display: none; }
+[data-theme=a] .round { font-size: 25px; letter-spacing: .2em; color: #b9ae9c; }
+[data-theme=a] .clock { font: italic 500 40px/1 "Cormorant Garamond", serif; min-width: 56px; }
+[data-theme=a] .urgent .clock { color: #ff6a4d; }
+[data-theme=a] #sensor { left: 0; right: 0; bottom: 0; height: 96px; display: flex; align-items: center; justify-content: center; font-size: 26px; letter-spacing: .06em; color: #b9ae9c; }
+[data-theme=a] #call { top: 300px; z-index: 8; text-shadow: 0 0 40px rgba(0, 0, 0, .7); }
+[data-theme=a] #call .zh { font-weight: 900; font-size: min(190px, calc(1400px / var(--n, 2))); letter-spacing: .12em; padding-left: .12em; line-height: 1.1; }
+[data-theme=a] #call .en { font: italic 500 56px "Cormorant Garamond", serif; margin-top: 6px; color: #d9ceb9; }
+[data-theme=a] #call .sub { font-size: 30px; margin-top: 14px; color: #b9ae9c; }
+[data-theme=a] [data-loser="1"] #call { translate: -400px 0; }
+[data-theme=a] [data-loser="0"] #call { translate: 400px 0; }
+[data-theme=a] #title { top: 132px; z-index: 8; }
+[data-theme=a] #title .zh { font-weight: 900; font-size: 128px; letter-spacing: .14em; padding-left: .14em; line-height: 1.1; }
+[data-theme=a] #title .en { font: italic 500 46px "Cormorant Garamond", serif; color: #d9ceb9; }
+[data-theme=a] .dmg { font: italic 500 110px "Cormorant Garamond", serif; color: var(--fg); }
+[data-theme=a] .burst { background: #fff; }
+[data-theme=a] .pick { bottom: 100px; }
+[data-theme=a] #dock { bottom: 112px; }
+
+/* ---------- b 拳赛海报: a two-colour fight bill ---------- */
+[data-theme=b] { --bg: #efe6d2; --fg: #1f2a5a; --flash: #e4412a; --floor: 164px; --h: 590px; --x0: 530px; --x1: 1390px; }
+[data-theme=b] #stage { font-family: "ZCOOL QingKe HuangYou", var(--ui); }
+[data-theme=b] #flash { mix-blend-mode: multiply; }
+.b .tex { position: absolute; inset: 0; z-index: 12; pointer-events: none; mix-blend-mode: multiply; opacity: .4; }
+.b .disc { top: 210px; width: 760px; height: 760px; margin-left: -380px; border-radius: 50%; }
+.b .disc.s0 { left: var(--x0); background: #e4412a; mix-blend-mode: multiply; opacity: .9; }
+.b .disc.s1 { left: var(--x1); background: #1f2a5a; opacity: .92; }
+.b .dots { top: 186px; width: 800px; height: 800px; margin-left: -372px; background-image: radial-gradient(circle, var(--c) 36%, transparent 38%); background-size: 17px 17px;
+  -webkit-mask: radial-gradient(circle, transparent 40%, #000 70%, transparent 71%); mask: radial-gradient(circle, transparent 40%, #000 70%, transparent 71%); }
+.b .dots.s0 { left: var(--x0); --c: #1f2a5a; }
+.b .dots.s1 { left: var(--x1); --c: #e4412a; }
+.b .foot { left: 0; right: 0; bottom: 0; height: 128px; background: #1f2a5a; z-index: 9; color: #efe6d2; font-style: normal; font-size: 44px; display: flex; align-items: center; padding: 0 64px; }
+[data-theme=b] .fighter { filter: drop-shadow(16px 14px 0 rgba(31, 42, 90, .92)); }
+[data-theme=b] .side { top: 34px; display: grid; grid-template-columns: auto auto; column-gap: 20px; align-items: start; }
+[data-theme=b] .side.p0 { left: 64px; }
+[data-theme=b] .side.p1 { right: 64px; direction: rtl; }
+[data-theme=b] .num { grid-row: 1 / 4; font: 400 196px/1 Anton, sans-serif; direction: ltr; color: #e4412a; }
+[data-theme=b] .side.p1 .num { color: #1f2a5a; }
+[data-theme=b] .who { font-size: 64px; line-height: 1; margin-top: 18px; }
+[data-theme=b] .meta { font-size: 28px; margin-top: 6px; direction: ltr; }
+[data-theme=b] .role { font-size: 34px; color: #e4412a; margin-top: 4px; }
+[data-theme=b] .bar { display: none; }
+[data-theme=b] .mid { top: 38px; left: 0; right: 0; text-align: center; }
+[data-theme=b] .title { font-size: 104px; line-height: 1; letter-spacing: .02em; text-shadow: 6px 5px 0 #e4412a; }
+[data-theme=b] .round, [data-theme=b] .clock { display: inline-block; font: 400 34px Anton, "ZCOOL QingKe HuangYou", sans-serif; letter-spacing: .1em; margin: 12px 8px 0; }
+[data-theme=b] .urgent .clock { color: #e4412a; }
+[data-theme=b] #sensor { right: 64px; bottom: 0; height: 128px; display: flex; align-items: center; color: #efe6d2; font: 400 34px Anton, "ZCOOL QingKe HuangYou", sans-serif; letter-spacing: .06em; }
+[data-theme=b] #call { top: 300px; z-index: 8; rotate: -7deg; }
+[data-theme=b] #call .zh { font-size: min(330px, calc(1500px / var(--n, 2))); line-height: 1; color: #e4412a; text-shadow: 12px 10px 0 #1f2a5a; }
+[data-theme=b] #call .en { display: none; }
+[data-theme=b] #call .sub { font-size: 44px; margin-top: 10px; color: #1f2a5a; }
+[data-theme=b] [data-beat=over] #call { top: 660px; rotate: -3deg; }
+[data-theme=b] [data-beat=over] #call .zh { font-size: 240px; }
+[data-theme=b] #title { display: none; }
+[data-theme=b] .dmg { font: 400 150px Anton, sans-serif; color: #e4412a; text-shadow: 7px 6px 0 #1f2a5a; }
+[data-theme=b] .burst { background: #e4412a; }
+[data-theme=b] .pick { bottom: 132px; }
+[data-theme=b] .pick button.on { border-bottom-color: #e4412a; }
+
+/* ---------- c 玩具展台: one colour per event, the type stands behind the toys ---------- */
+[data-theme=c] { --bg: #1b3fe0; --fg: #fff; --flash: #f6c933; --floor: 176px; --h: 620px; --x0: 400px; --x1: 1500px; }
+[data-theme=c] #stage { font-family: "Noto Sans SC", var(--ui); transition: background .1s; }
+[data-theme=c] [data-beat=armed] { --bg: #142fa8; }
+[data-theme=c] [data-beat=hit] { --bg: #ff4a1c; }
+[data-theme=c] [data-beat=safe] { --bg: #0a8f6c; }
+[data-theme=c] [data-beat=dull] { --bg: #4a4f66; }
+[data-theme=c] [data-beat=over] { --bg: #f4efe4; --fg: #101522; }
+[data-theme=c] [data-beat=over], [data-theme=c] .waiting { --h: 430px; --floor: 150px; }
+.c .cyc { left: -60px; right: -60px; bottom: -40px; height: 330px; border-radius: 50% 50% 0 0 / 70px; background: color-mix(in oklch, var(--bg) 84%, #000); transition: background .1s; }
+.c .shadow { bottom: 130px; width: 540px; height: 80px; margin-left: -270px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .5), transparent); }
+.c .s0 { left: var(--x0); }
+.c .s1 { left: var(--x1); }
+[data-beat=over] .c .shadow, .waiting .c .shadow { width: 400px; margin-left: -200px; }
+[data-theme=c] .side { top: 44px; width: 860px; border-top: 3px solid var(--fg); padding-top: 16px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+[data-theme=c] .side.p0 { left: 64px; }
+[data-theme=c] .side.p1 { right: 64px; direction: rtl; }
+[data-theme=c] .who { grid-column: 1; font-weight: 900; font-size: 44px; line-height: 1.2; }
+[data-theme=c] .meta { grid-column: 1; font-size: 25px; font-weight: 500; direction: ltr; text-align: start; }
+[data-theme=c] .side.p1 .meta { text-align: end; }
+[data-theme=c] .role { grid-column: 1; font-size: 28px; font-weight: 900; }
+[data-theme=c] .num { grid-column: 2; grid-row: 1 / 3; font: 800 112px/1 Archivo, sans-serif; font-stretch: 125%; letter-spacing: -.03em; direction: ltr; text-align: start; }
+[data-theme=c] .side.p1 .num { text-align: end; }
+[data-theme=c] .bar { display: none; }
+[data-theme=c] .ticks { grid-column: 2; display: flex; gap: 6px; margin-top: 8px; }
+[data-theme=c] .ticks b { flex: 1; height: 14px; background: var(--fg); transition: opacity .3s; }
+[data-theme=c] .ticks b.off { opacity: .18; }
+[data-theme=c] .mid { top: 62px; left: 0; right: 0; text-align: center; }
+[data-theme=c] .title { display: none; }
+[data-theme=c] .round { font-size: 28px; font-weight: 500; }
+[data-theme=c] .clock { font: 800 60px/1.2 Archivo, sans-serif; font-stretch: 125%; }
+[data-theme=c] .urgent .clock { color: #ffd23f; }
+[data-theme=c] #sensor { left: 0; right: 0; bottom: 40px; display: flex; justify-content: center; font-weight: 500; font-size: 30px; }
+[data-theme=c] #call { top: 220px; z-index: 2; }
+[data-theme=c] #call .zh { font-weight: 900; font-size: min(520px, calc(1760px / var(--n, 2))); line-height: 1; letter-spacing: -.04em; }
+[data-theme=c] #call .en { display: none; }
+[data-theme=c] #call .sub { font-size: 40px; font-weight: 900; margin-top: 10px; }
+[data-theme=c] [data-beat=over] #call { top: 205px; }
+[data-theme=c] #title { top: 215px; z-index: 2; }
+[data-theme=c] #title .zh { font-weight: 900; font-size: 352px; line-height: 1; letter-spacing: -.04em; }
+[data-theme=c] #dock { bottom: 96px; }
+[data-theme=c] #title .en { display: none; }
+[data-theme=c] .dmg { font: 800 130px Archivo, sans-serif; font-stretch: 125%; color: var(--fg); }
+[data-theme=c] .burst { background: #fff; }
+[data-theme=c] .pick { bottom: 86px; }
+
+@media (prefers-reduced-motion: reduce) { .fighter .body { animation: none; } }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <radialGradient id="g-body" cx="40%" cy="28%" r="80%"><stop offset="0" stop-color="#fff2a8"/><stop offset=".35" stop-color="#f6c933"/><stop offset=".8" stop-color="#e1a91c"/><stop offset="1" stop-color="#b98410"/></radialGradient>
-    <radialGradient id="g-belly" cx="45%" cy="35%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset=".6" stop-color="#fff1d6"/><stop offset="1" stop-color="#e9cf9c"/></radialGradient>
-    <radialGradient id="g-eye" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#eef7d2"/><stop offset=".55" stop-color="#c9e39a"/><stop offset="1" stop-color="#8fbf5a"/></radialGradient>
-    <radialGradient id="g-olive" cx="40%" cy="30%"><stop offset="0" stop-color="#94784a"/><stop offset="1" stop-color="#4f3c1f"/></radialGradient>
-    <symbol id="palm" viewBox="-30 -40 60 70">
-      <ellipse cx="0" cy="8" rx="17" ry="19"/>
-      <ellipse cx="-14" cy="-20" rx="4.6" ry="13" transform="rotate(-14 -14 -20)"/>
-      <ellipse cx="-4" cy="-26" rx="4.8" ry="14"/>
-      <ellipse cx="6.5" cy="-25" rx="4.8" ry="13.5" transform="rotate(6 6.5 -25)"/>
-      <ellipse cx="16" cy="-18" rx="4.4" ry="11.5" transform="rotate(16 16 -18)"/>
-      <ellipse cx="-22" cy="10" rx="4.6" ry="11" transform="rotate(-50 -22 10)"/>
-    </symbol>
-    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></symbol>
-    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.1-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M4 3.5v5h5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
-    <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  </defs>
-</svg>
+<div id="view"><div id="fit"><div id="stage" data-beat="ready" class="">
+  <div class="set a"><i class="spot s0"></i><i class="spot s1"></i><i class="pool s0"></i><i class="pool s1"></i><i class="lb t"></i><i class="lb b"></i></div>
+  <div class="set b"><i class="disc s0"></i><i class="disc s1"></i><i class="dots s0"></i><i class="dots s1"></i><i class="foot">空气巴掌对决</i>
+    <svg class="tex" width="1920" height="1080" aria-hidden="true"><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/><feColorMatrix values="0 0 0 0 .4 0 0 0 0 .34 0 0 0 0 .24 0 0 0 .55 0"/></filter><rect width="1920" height="1080" filter="url(#grain)"/></svg></div>
+  <div class="set c"><i class="cyc"></i><i class="shadow s0"></i><i class="shadow s1"></i></div>
 
-<div id="app">
-  <div id="top">
-    <div class="host p1" style="--c: var(--red)"><div class="avatar" id="av0" title="换主播（开局前，按 1）"></div>
-      <div class="who"><div class="name" id="name0"></div><div class="meta"><span class="live" id="live0">未连麦</span><span class="dev" id="dev0">SLAP-P1</span></div></div></div>
-    <div id="pkbadge"><div class="pk">PK</div><div class="clock" id="clock">等待开局</div></div>
-    <div class="host p2" style="--c: var(--blue)"><div class="avatar" id="av1" title="换主播（开局前，按 2）"></div>
-      <div class="who"><div class="name" id="name1"></div><div class="meta"><span class="live" id="live1">未连麦</span><span class="dev" id="dev1">SLAP-P2</span></div></div></div>
+  <div id="title"><span class="zh">绷不住大赛</span><span class="en">An Air Slap Duel</span></div>
+  <div id="call"></div>
+  <div class="fighter p0" id="f0"><div class="body"></div></div>
+  <div class="fighter p1" id="f1"><div class="body"></div></div>
+  <div class="burst" id="burst"></div>
+
+  <div id="hud">
+    <div class="side p0"><span class="num" id="num0">100</span><span class="who" id="name0"></span><span class="meta"><span id="dev0">SLAP-P1</span> · <span class="link off" id="link0">未连接</span></span><span class="role" id="role0"></span><span class="bar" id="bar0"><i></i></span><span class="ticks" id="ticks0"></span></div>
+    <div class="side p1"><span class="num" id="num1">100</span><span class="who" id="name1"></span><span class="meta"><span id="dev1">SLAP-P2</span> · <span class="link off" id="link1">未连接</span></span><span class="role" id="role1"></span><span class="bar" id="bar1"><i></i></span><span class="ticks" id="ticks1"></span></div>
+    <div class="mid" id="mid"><div class="title">绷不住大赛</div><div class="round" id="round">等待开局</div><div class="clock" id="clock"></div></div>
   </div>
+  <div id="sensor"></div>
 
-  <div id="pk"><div class="r" style="width:50%"></div><div class="b" style="width:50%"></div><div class="v" style="left:50%">VS</div>
-    <div class="n" id="pkn0"><small>绷住值</small>100</div><div class="n" id="pkn1">100<small>绷住值</small></div></div>
+  <div class="pick p0" id="pick0"></div>
+  <div class="pick p1" id="pick1"></div>
 
-  <div id="streams">
-    <div class="panel" id="s0"><div class="tag" id="tag0"></div><div class="role off" id="role0">出手</div><div class="light"></div><div class="streamer" id="f0"></div><div class="desk"></div></div>
-    <div class="panel" id="s1"><div class="tag" id="tag1"></div><div class="role off" id="role1">防守</div><div class="light"></div><div class="streamer" id="f1"></div><div class="desk"></div></div>
-    <div id="danmaku"></div>
-    <div id="call"></div>
-    <div id="idle"><div class="t">绷不住大赛</div><div class="s">空气巴掌 · 先绷不住的输 · 按 1 / 2 换主播</div><div><span class="go" id="gohint">按空格开局</span></div></div>
-    <div id="end" class="hidden"><div class="t">绷不住了！</div><div><span class="s" id="endline"></span></div><div class="again">按空格再来一局</div></div>
-  </div>
-
-  <div id="bottom">
-    <div id="chat"></div>
-    <div id="buttons">
-      <button class="btn main" data-cmd="start"><span class="ic"><svg><use href="#i-play"/></svg></span>开局</button>
-      <button class="btn" data-cmd="reset"><span class="ic"><svg><use href="#i-reset"/></svg></span>重置</button>
-      <button class="btn" id="mute"><span class="ic"><svg><use href="#i-sound"/></svg></span><span class="lb">音效</span></button>
-      <button class="btn" id="fs"><span class="ic"><svg><use href="#i-full"/></svg></span>全屏</button>
-    </div>
+  <div id="dock">
     <div id="keys" class="hidden"></div>
+    <div id="btns">
+      <button data-cmd="start">开局<kbd>空格</kbd></button><button data-cmd="reset">重置<kbd>R</kbd></button><button id="themebtn">风格<kbd>T</kbd></button><button id="mute">音效<kbd>M</kbd></button><button id="fs">全屏<kbd>F</kbd></button>
+    </div>
   </div>
-</div>
-<div id="hand"><svg viewBox="-40 -50 80 95"><use id="handuse" href="#palm" x="-30" y="-40" width="60" height="70" fill="#5d5446" stroke="#2e271d" stroke-width="2"/></svg></div>
-<div id="flash"></div>
-<div id="toast"></div>
-<div id="offline" class="hidden">和 web_dashboard.py 的连接断了，正在重连…</div>
+  <div id="flash"></div>
+  <div id="toast"></div>
+  <div id="offline" class="hidden">和 web_dashboard.py 的连接断了，正在重连…</div>
+</div></div></div>
 
 <script>
 "use strict";
@@ -323,37 +269,34 @@ button { font-family: inherit; }
 const ATTACK_TIMEOUT_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
-// Streamers. Frames live in chars/<id>/ (served at /chars/). pose: height and bottom as % of the panel,
-// x shift in %, face = which way the frame looks (it is mirrored so the streamer faces the opponent).
-// cheek / face: [x, y] as fractions of the still frame, for P1 (opponent on the right); P2 mirrors x.
-// avatar: the still frame's size and offset inside the round avatar, in % of the avatar.
-const seq = (n) => Array.from({ length: n }, (_, k) => "laugh_" + k);
+const stage = $("stage");
+// The family, as lined up in 奶史_'s group shot. size: how big they stand next to each other.
 const CHARS = [
-  { id: "naiwa", name: "奶蛙", still: "still_0", laugh: seq(13), fps: 12, hand: "#5d5446",
-    pose: { still: { h: 90, b: -9 }, laugh: { h: 90, b: -11, face: "right" } }, cheek: [.64, .12], avatar: { w: 260, x: -80, y: 2 } },
-  { id: "naicha", name: "奶茶", still: "laugh_0", laugh: seq(8), fps: 8, hand: "#55524c",
-    pose: { still: { h: 66, b: 9 }, laugh: { h: 66, b: 9 } }, cheek: [.62, .36], avatar: { w: 170, x: -26, y: -18 } },
-  { id: "naigou", name: "奶狗", still: "still", laugh: seq(5), fps: 7, hand: "#d9c38d",
-    pose: { still: { h: 70, b: 10, face: "left" }, laugh: { h: 84, b: 8 } }, cheek: [.82, .14], avatar: { w: 220, x: -112, y: -8 } },
-  { id: "dounai", name: "豆奶", still: "still", laugh: seq(5), fps: 6, hand: "#e9a83c",
-    pose: { still: { h: 90, b: -4 }, laugh: { h: 86, b: -4 } }, cheek: [.6, .2], avatar: { w: 175, x: -38, y: -6 } },
+  { id: "naiwa",  name: "奶蛙", size: 1 },
+  { id: "naicha", name: "奶茶", size: .8 },
+  { id: "naigou", name: "奶狗", size: .82 },
+  { id: "dounai", name: "豆奶", size: .9 },
+  { id: "naidan", name: "奶蛋", size: .92 },
+  { id: "naifen", name: "奶粉", size: 1.1 },
+  { id: "naishu", name: "奶鼠", size: .82 },
 ];
-const loadPick = () => { try { const p = JSON.parse(localStorage.getItem("slap.streamers")); if (p && CHARS[p[0]] && CHARS[p[1]]) return p; } catch (e) {} return [0, 1]; };
-const PICK = loadPick();
-const who = (i) => CHARS[PICK[i]];
-const nm = (i) => who(i).name;
+// Share of the character height per pose: the cutouts are cropped to their outline.
+const POSE_SIZE = { idle: 1, windup: .98, slap: .84, hit: .9, block: .8, dodge: .88, dizzy: .96, laugh: .96, laugh2: .82, win: 1.04 };
+const FALLBACK = { hit: ["hit", "laugh"], laugh: ["laugh"], laugh2: ["laugh2", "laugh"], windup: ["windup"], slap: ["slap", "windup"],
+                   block: ["block"], dodge: ["dodge"], dizzy: ["dizzy", "hit"], win: ["win"], idle: [] };
 const CLS = { forehand: "正手", backhand: "反手", feint: "假动作", dodge_left: "左闪", dodge_right: "右闪", block: "格挡", background: "背景" };
+// beat colours the backdrop in direction c: hit = it landed, safe = it was stopped, dull = nothing happened
 const OUTCOME = {
-  HIT:            { big: "啪！",       cls: "red",  dm: ["好响", "这一巴掌有回音", "啪！！", "听着都疼", "脸都打歪了"] },
-  JUMPED:         { big: "抢跑了",     cls: "red",  dm: ["动太早了兄弟", "抢跑照吃", "急了急了"] },
-  GRAZE:          { big: "擦到了",     cls: "grey", dm: ["闪反了哈哈", "方向错了", "擦边球"] },
-  MISS:           { big: "闪开！",     cls: "blue", dm: ["闪现", "躲开了哈哈哈", "身法了得", "空气巴掌（物理）"] },
-  BLOCKED:        { big: "挡住了",     cls: "blue", dm: ["稳", "防住了但没完全防住", "格挡！"] },
-  COUNTERED:      { big: "反杀！",     cls: "",     dm: ["反杀！！", "攻守互换", "这波是反击", "节目效果拉满"] },
-  FEINT_PUNISHED: { big: "骗到了！",   cls: "",     dm: ["被骗了哈哈哈", "假动作骗到真巴掌", "暴击！"] },
-  FEINT_FOOLED:   { big: "上当了",     cls: "grey", dm: ["被假动作骗了", "下次别那么急"] },
-  FEINT_HELD:     { big: "没上当",     cls: "blue", dm: ["稳住了", "不为所动"] },
-  TIMEOUT:        { big: "时间到",     cls: "grey", dm: ["怎么不打", "犹豫就会败北", "换人换人"] },
+  HIT:            { zh: "啪",     en: "Slap.",                 beat: "hit" },
+  JUMPED:         { zh: "抢跑了", en: "False start.",          beat: "hit" },
+  GRAZE:          { zh: "擦到了", en: "A graze.",              beat: "hit" },
+  MISS:           { zh: "闪开",   en: "Missed.",               beat: "safe" },
+  BLOCKED:        { zh: "挡住了", en: "Blocked.",              beat: "safe" },
+  COUNTERED:      { zh: "反杀",   en: "Countered.",            beat: "hit" },
+  FEINT_PUNISHED: { zh: "骗到了", en: "Fooled, then slapped.", beat: "hit" },
+  FEINT_FOOLED:   { zh: "上当了", en: "Took the bait.",        beat: "dull" },
+  FEINT_HELD:     { zh: "没上当", en: "Held firm.",            beat: "safe" },
+  TIMEOUT:        { zh: "时间到", en: "Time.",                 beat: "dull" },
 };
 const STRENGTH = { light: 0.55, medium: 0.8, heavy: 1.15 };
 const STRENGTH_ZH = { light: "轻", medium: "", heavy: "痛击" };
@@ -362,62 +305,107 @@ const KEYMAP = {
   KeyA: [0, "forehand"], KeyD: [0, "backhand"], KeyW: [0, "feint"], KeyQ: [0, "dodge_left"], KeyE: [0, "dodge_right"], KeyS: [0, "block"],
   KeyJ: [1, "forehand"], KeyL: [1, "backhand"], KeyI: [1, "feint"], KeyU: [1, "dodge_left"], KeyO: [1, "dodge_right"], KeyK: [1, "block"],
 };
-const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false, mode: "referee",
-            startedAt: 0, combo: [0, 0] };
+const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false, mode: "referee", startedAt: 0, winner: null };
 
-/* ---------------- the streamer (stacked frames shared by the stream panel and the avatars) ---------------- */
-const src = (c, f) => `/chars/${c.id}/${f}.webp`;
-function flips(i, state) { const f = who(i).pose[state].face; return (f === "left" && i === 0) || (f === "right" && i === 1); }
-function frameImg(i, cls, f, state) {
-  const c = who(i), p = c.pose[state];
-  return `<img class="${cls}" src="${src(c, f)}" alt="" draggable="false"
-    style="height:${p.h}%;bottom:${p.b}%;margin-left:${p.x || 0}%;--fx:${flips(i, state) ? -1 : 1}">`;
+/* ---------------- theme + stage ---------------- */
+const THEMES = { a: "午夜决斗", b: "拳赛海报", c: "玩具展台" };
+function setTheme(t, quiet) {
+  document.documentElement.dataset.theme = t;
+  document.body.style.background = t === "b" ? "#efe6d2" : t === "c" ? "#101522" : "#000";
+  try { localStorage.setItem("slap.theme", t); } catch (e) {}
+  if (!quiet) toast(THEMES[t]);
 }
-function streamerHTML(i) {
-  const c = who(i);
-  return `<div class="bob"><div class="body">${frameImg(i, "still", c.still, "still")}${c.windup ? frameImg(i, "windup", c.windup, "still") : ""}${
-    c.laugh.map(f => frameImg(i, "laugh", f, "laugh")).join("")}</div></div>`;
+function nextTheme() { const k = Object.keys(THEMES); setTheme(k[(k.indexOf(document.documentElement.dataset.theme) + 1) % k.length]); }
+function fitStage() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `scale(${s})`;
+  $("fit").style.width = 1920 * s + "px"; $("fit").style.height = 1080 * s + "px";
 }
-function avatarHTML(i) {
-  const c = who(i), a = c.avatar;
-  return `<img src="${src(c, c.still)}" alt="" draggable="false" style="width:${a.w}%;${i === 1 && c.pose.still.face ? "transform:scaleX(-1);right" : "left"}:${a.x}%;top:${a.y}%">`;
+addEventListener("resize", fitStage);
+const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+
+let mouseH;
+addEventListener("mousemove", () => { stage.classList.add("mouse"); clearTimeout(mouseH); mouseH = setTimeout(() => stage.classList.remove("mouse"), 2600); });
+const playing = () => S.state !== "IDLE" && !S.over;
+
+/* ---------------- fighters ---------------- */
+let MAN = {};                                   // chars/manifest.json: id -> pose -> [w, h]
+const roster = () => CHARS.filter(c => MAN[c.id] && MAN[c.id].idle);
+function loadPick() {
+  const ids = roster().map(c => c.id);
+  try { const p = JSON.parse(localStorage.getItem("slap.fighters")); if (p && ids.includes(p[0]) && ids.includes(p[1]) && p[0] !== p[1]) return p; } catch (e) {}
+  return ids.slice(0, 2);
 }
-function setStreamer(i) {
-  const c = who(i), f = $("f" + i), panel = $("s" + i);
-  f.className = "streamer"; f.innerHTML = streamerHTML(i);
-  panel.querySelectorAll(".fx").forEach(e => e.remove());
-  panel.insertAdjacentHTML("beforeend", `
-    <svg class="fx print" viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="#e0233f"/></svg>
-    <div class="fx guardfx">${`<svg viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="${c.hand}" stroke="rgba(0,0,0,.45)" stroke-width="2.5"/></svg>`.repeat(2)}</div>
-    <div class="fx stars">✦ ✧ ✦</div>`);
-  $("av" + i).innerHTML = avatarHTML(i);
+let PICK = [];
+const who = (i) => CHARS.find(c => c.id === PICK[i]);
+const nm = (i) => who(i).name;
+const poseSrc = (c, p) => `/chars/${c.id}/${p}.webp`;
+function poseOf(i, p) {
+  const have = MAN[PICK[i]] || {};
+  for (const q of FALLBACK[p] || []) if (have[q]) return q;
+  return "idle";
+}
+function setPose(i, p) {
+  const q = poseOf(i, p), f = $("f" + i);
+  if (f.dataset.pose === q) return;
+  f.dataset.pose = q;
+  f.querySelectorAll("img").forEach(m => m.classList.toggle("on", m.dataset.pose === q));
+  f.querySelector(".body").animate([{ transform: "scale(1.03, .96)" }, { transform: "none" }], { duration: 130, easing: "ease-out" });
+}
+// What a fighter falls back to when an action ends.
+function rest(i) {
+  if (S.over) return i === S.winner ? "win" : "laugh";
+  return S.state === "ARMED" && i === S.attacker ? "windup" : "idle";
+}
+function holdPose(i, p, ms, after) {
+  const f = $("f" + i);
+  clearTimeout(f.poseH); setPose(i, p);
+  f.poseH = setTimeout(() => { if (after) after(); else setPose(i, rest(i)); }, ms);
+}
+function buildFighter(i) {
+  const c = who(i), f = $("f" + i), poses = Object.keys(MAN[c.id]);
+  f.querySelector(".body").innerHTML = poses.map(p => `<img data-pose="${p}" src="${poseSrc(c, p)}" alt="" draggable="false" style="--k:${(POSE_SIZE[p] || 1) * c.size}">`).join("");
+  delete f.dataset.pose;
+  setPose(i, rest(i));
   $("name" + i).textContent = c.name;
-  $("tag" + i).textContent = c.name + "的直播间";
-  const leg = document.querySelector("#keys .who.p" + i); if (leg) leg.textContent = c.name;
+  const leg = document.querySelector("#keys .who" + i); if (leg) leg.textContent = c.name;
+  buildPicks();
 }
-function cycleStreamer(i) {
-  if (!(S.state === "IDLE" || S.over)) { toast("比赛中不能换主播"); return; }
-  do { PICK[i] = (PICK[i] + 1) % CHARS.length; } while (PICK[i] === PICK[i ^ 1] && CHARS.length > 1);
-  try { localStorage.setItem("slap.streamers", JSON.stringify(PICK)); } catch (e) {}
-  setStreamer(i);
-  if (S.over) $("f" + (S.winner ^ 1)).classList.add("lol");
+function buildPicks() {
+  for (const i of [0, 1]) {
+    const box = $("pick" + i); box.innerHTML = "";
+    for (const c of roster()) {
+      if (c.id === PICK[i ^ 1]) continue;
+      const b = document.createElement("button");
+      b.className = c.id === PICK[i] ? "on" : ""; b.title = c.name;
+      b.innerHTML = `<img src="${poseSrc(c, "idle")}" alt="${c.name}" draggable="false">`;
+      b.addEventListener("click", () => choose(i, c.id));
+      box.appendChild(b);
+    }
+  }
+}
+function choose(i, id) {
+  if (playing()) { toast("比赛中不能换角色"); return; }
+  PICK[i] = id;
+  try { localStorage.setItem("slap.fighters", JSON.stringify(PICK)); } catch (e) {}
+  buildFighter(i); buildFighter(i ^ 1);
   Sfx.boing();
 }
-
-// Signature move: 捧腹大笑. Ping-pongs through the laugh frames; ms = 0 laughs until stopped.
-function laugh(i, ms = 0) {
-  const f = $("f" + i), frames = [...f.querySelectorAll("img.laugh")];
-  clearInterval(f.lH); clearTimeout(f.lT);
-  let k = 0, dir = 1;
-  f.classList.remove("windup"); f.classList.add("laughing");
-  const step = () => {
-    frames.forEach((x, j) => x.classList.toggle("on", j === k));
-    if (frames.length > 1) { if (k + dir < 0 || k + dir >= frames.length) dir = -dir; k += dir; }
-  };
-  step(); f.lH = setInterval(step, 1000 / who(i).fps);
-  if (ms) f.lT = setTimeout(() => stopLaugh(i), ms);
+function cycle(i) {
+  const ids = roster().map(c => c.id).filter(id => id !== PICK[i ^ 1]);
+  if (ids.length) choose(i, ids[(ids.indexOf(PICK[i]) + 1) % ids.length]);
 }
-function stopLaugh(i) { const f = $("f" + i); clearInterval(f.lH); clearTimeout(f.lT); f.classList.remove("laughing"); }
+// Signature move: 捧腹大笑. ms = 0 laughs until the board is reset, alternating the two laugh poses.
+function laugh(i, ms = 0) {
+  const f = $("f" + i);
+  clearTimeout(f.poseH); clearInterval(f.lolH);
+  setPose(i, "laugh");
+  if (ms) { f.poseH = setTimeout(() => setPose(i, rest(i)), ms); return; }
+  f.classList.add("lol");
+  let two = false;
+  f.lolH = setInterval(() => { two = !two; setPose(i, two ? "laugh2" : "laugh"); }, 620);
+}
+function stopLaugh(i) { const f = $("f" + i); clearInterval(f.lolH); clearTimeout(f.poseH); f.classList.remove("lol"); }
 
 /* ---------------- sound (synthesised, no files) ---------------- */
 const Sfx = {
@@ -461,7 +449,6 @@ const Sfx = {
     const c = this.ctx, t = c.currentTime + when, o = c.createOscillator();
     o.type = "triangle"; o.frequency.value = fr; o.connect(this.gain(t, vol, 0.5)); o.start(t); o.stop(t + 0.55);
   },
-  gift() { this.ding(1318, 0); this.ding(1760, 0.08); },
   laugh(len = 2.2) {   // "哈哈哈" — breathy bursts riding a falling pitch
     if (!this.ok()) return;
     const c = this.ctx, t0 = c.currentTime;
@@ -477,234 +464,147 @@ const Sfx = {
 };
 
 /* ---------------- helpers ---------------- */
-// The visible character, not the whole panel: the still frame's box (the laugh frames are close-ups of the same pose).
-function charBox(i) { const r = $("f" + i).querySelector("img.still").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top, w: r.width, h: r.height, r }; }
-function facePoint(i, xy) {   // [x, y] fractions of the still frame, given for P1; P2 is mirrored
-  const { r } = charBox(i), fx = i ? 1 - xy[0] : xy[0];
-  return { x: r.left + fx * r.width, y: r.top + xy[1] * r.height };
-}
-function cheekOf(i) { return facePoint(i, who(i).cheek); }
-function placeFx(i, sel, x, y) {   // viewport point -> position inside panel i
-  const e = $("s" + i).querySelector(sel), pr = $("s" + i).getBoundingClientRect();
-  e.style.left = x - pr.left + "px"; e.style.top = y - pr.top + "px"; return e;
-}
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2200); }
 function playerOf(name) { return /P2|DEF/.test(name) ? 1 : 0; }
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const toward = (i) => (i ? -1 : 1);
+const fighterX = (i) => cssPx(i ? "--x1" : "--x0");
 
-function call(big, cls = "", sub = "", hold = 1100) {
+// The backdrop state. It decays to the base beat of the round (direction c reads it as colour).
+function baseBeat() { return S.over ? "over" : S.state === "ARMED" ? "armed" : "ready"; }
+function beat(b, ms) {
+  stage.dataset.beat = b; clearTimeout(beat.h);
+  if (ms) beat.h = setTimeout(() => { stage.dataset.beat = baseBeat(); }, ms);
+}
+function call(zh, en = "", sub = "", hold = 1300) {
   const a = $("call");
-  a.innerHTML = "";
-  const b = document.createElement("div"); b.className = "big " + cls; b.textContent = big; a.appendChild(b);
-  if (sub) { const s = document.createElement("div"); const sp = document.createElement("span"); sp.className = "sub"; sp.textContent = sub; s.appendChild(sp); a.appendChild(s); }
-  b.animate([{ transform: "scale(.3) rotate(-8deg)", opacity: 0 }, { transform: "scale(1.12) rotate(3deg)", opacity: 1, offset: 0.55 }, { transform: "scale(1) rotate(0)", opacity: 1 }],
-    { duration: 380, easing: "cubic-bezier(.3,1.6,.5,1)", fill: "forwards" });
+  a.innerHTML = ""; a.style.setProperty("--n", [...zh].length); a.style.opacity = 1;
+  for (const [cls, t] of [["zh", zh], ["en", en], ["sub", sub]]) {
+    if (!t) continue;
+    const s = document.createElement("span"); s.className = cls; s.textContent = t; a.appendChild(s);
+  }
+  a.firstChild.animate([{ transform: "scale(.72)", opacity: 0 }, { transform: "scale(1.04)", opacity: 1, offset: .55 }, { transform: "scale(1)", opacity: 1 }],
+    { duration: 240, easing: "cubic-bezier(.2,1.4,.4,1)" });
   clearTimeout(call.h);
-  call.h = setTimeout(() => { a.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-2vh)" }], { duration: 250, fill: "forwards" })
-    .onfinish = () => { if (a.firstChild === b) a.innerHTML = ""; a.getAnimations().forEach(x => x.cancel()); }; }, hold);
+  if (hold) call.h = setTimeout(() => a.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = (e) => { a.innerHTML = ""; e.target.cancel(); }, hold);
 }
-
-function danmaku(text, opts = {}) {
-  const layer = $("danmaku"), d = document.createElement("div");
-  d.className = "dm" + (opts.y ? " y" : "") + (opts.big ? " big" : "");
-  d.textContent = text;
-  const lanes = 8, lane = opts.lane ?? Math.floor(Math.random() * lanes);
-  d.style.top = (4 + lane * (88 / lanes)) + "%";
-  layer.appendChild(d);
-  const w = layer.clientWidth + d.clientWidth;
-  d.animate([{ transform: "translateX(0)" }, { transform: `translateX(${-w}px)` }],
-    { duration: (opts.speed || 5200) + Math.random() * 1600, delay: opts.delay || 0, easing: "linear" }).onfinish = () => d.remove();
-}
-function crowd(lines, n = 3) { for (let k = 0; k < n; k++) danmaku(pick(lines), { delay: k * 260, y: Math.random() < 0.3 }); }
-
-function chat(user, text, data, p) {
-  const box = $("chat"), m = document.createElement("div");
-  m.className = "msg";
-  m.innerHTML = `<span class="u p${p}">${user}</span>${text}${data ? `<span class="d">${data}</span>` : ""}`;
-  box.appendChild(m);
-  while (box.children.length > 3) box.firstChild.remove();
-}
-
 function setHp(hp, animate = true) {
-  const a = Math.max(0, hp[0]), b = Math.max(0, hp[1]), share = a + b ? (a / (a + b)) * 100 : 50;
-  const r = document.querySelector("#pk .r"), bl = document.querySelector("#pk .b"), v = document.querySelector("#pk .v");
-  if (!animate) r.style.transition = bl.style.transition = v.style.transition = "none";
-  r.style.width = share + "%"; bl.style.width = (100 - share) + "%"; v.style.left = Math.min(97, Math.max(3, share)) + "%";   // knob stays on screen
-  if (!animate) { void r.offsetWidth; r.style.transition = bl.style.transition = v.style.transition = ""; }
-  $("pkn0").innerHTML = `<small>绷住值</small>${a}`; $("pkn1").innerHTML = `${b}<small>绷住值</small>`;
+  hp.forEach((v, i) => {
+    const b = $("bar" + i), val = Math.max(0, v);
+    if (!animate) b.firstChild.style.transition = "none";
+    $("num" + i).textContent = val; b.style.setProperty("--v", val + "%");
+    if (!animate) { void b.offsetWidth; b.firstChild.style.transition = ""; }
+    $("ticks" + i).innerHTML = Array.from({ length: 10 }, (_, n) => `<b class="${n < Math.ceil(val / 10) ? "" : "off"}"></b>`).join("");
+  });
   S.hp = hp.slice();
 }
-
 function setRoles() {
   const show = !S.over && S.state !== "IDLE" && S.round > 0;
-  for (const i of [0, 1]) {
-    const r = $("role" + i), atk = i === S.attacker;
-    r.textContent = atk ? "出手" : "防守";
-    r.className = "role " + (atk ? "atk" : "def") + (show ? "" : " off");
-  }
+  for (const i of [0, 1]) { const r = $("role" + i); r.textContent = i === S.attacker ? "出手" : "防守"; r.classList.toggle("show", show); }
+  stage.dataset.atk = show ? S.attacker : "";
 }
-
 function shake(k) {
-  const px = 4 + 16 * k;
-  $("streams").animate([{ transform: "translate(0,0)" }, { transform: `translate(${-px}px,${px * .3}px)` }, { transform: `translate(${px * .7}px,${-px * .4}px)` },
-    { transform: `translate(${-px * .4}px,${px * .2}px)` }, { transform: "translate(0,0)" }], { duration: 240 + 180 * k, easing: "ease-out" });
+  const px = 5 + 20 * k;
+  stage.animate([{ translate: "0 0" }, { translate: `${-px}px ${px * .4}px` }, { translate: `${px * .75}px ${-px * .4}px` }, { translate: `${-px * .4}px ${px * .25}px` }, { translate: "0 0" }],
+    { duration: 240 + 160 * k, easing: "ease-out" });
 }
-function flash(v = 0.5) { $("flash").animate([{ opacity: v }, { opacity: 0 }], { duration: 280, easing: "ease-out" }); }
-
-function popText(x, y, text) {
-  const p = document.createElement("div"); p.className = "pop"; p.textContent = text;
-  p.style.left = x + "px"; p.style.top = y + "px"; document.body.appendChild(p);
-  const dx = (Math.random() - 0.5) * 120;
-  p.animate([{ transform: "translate(-50%,-50%) scale(.4)", opacity: 0 }, { transform: `translate(calc(-50% + ${dx * .4}px),-110%) scale(1.1)`, opacity: 1, offset: .3 },
-    { transform: `translate(calc(-50% + ${dx}px),-260%) scale(1)`, opacity: 0 }], { duration: 1100, easing: "ease-out" }).onfinish = () => p.remove();
-}
-
-function popDamage(i, dmg, label, crit) {
+function flash(v = 1) { $("flash").animate([{ opacity: v }, { opacity: v, offset: .3 }, { opacity: 0 }], { duration: 170 }); }
+function popDamage(i, dmg) {
   if (!dmg) return;
-  const b = charBox(i), d = document.createElement("div");
-  d.className = "dmg" + (crit ? " crit" : "");
-  d.innerHTML = `−${dmg}${label ? `<small>${label}</small>` : ""}`;
-  d.style.left = b.x + (i ? 1 : -1) * b.w * 0.55 + "px"; d.style.top = b.y + b.h * 0.18 + "px";
-  document.body.appendChild(d);
-  d.animate([{ transform: "translate(-50%,-30%) scale(.4)", opacity: 0 }, { transform: "translate(-50%,-60%) scale(1.2)", opacity: 1, offset: .2 },
-    { transform: "translate(-50%,-90%) scale(1)", opacity: 1, offset: .7 }, { transform: "translate(-50%,-150%) scale(.95)", opacity: 0 }],
-    { duration: 1300, easing: "ease-out" }).onfinish = () => d.remove();
+  const d = document.createElement("div");
+  d.className = "dmg"; d.textContent = `−${dmg}`;
+  d.style.left = fighterX(i) + toward(i) * -150 + "px"; d.style.top = 1080 - cssPx("--floor") - cssPx("--h") * .95 + "px";
+  stage.appendChild(d);
+  d.animate([{ translate: "0 20px", scale: .6, opacity: 0 }, { translate: "0 0", scale: 1.08, opacity: 1, offset: .14 }, { translate: "0 -14px", scale: 1, opacity: 1, offset: .75 }, { translate: "0 -60px", scale: 1, opacity: 0 }],
+    { duration: 1250, easing: "ease-out" }).onfinish = () => d.remove();
+}
+function burstAt(i, k) {
+  const b = $("burst"), s = .55 + .55 * k;
+  b.style.left = fighterX(i) - toward(i) * 60 + "px"; b.style.top = 1080 - cssPx("--floor") - cssPx("--h") * .62 + "px";
+  b.animate([{ opacity: 1, transform: `scale(${s * .6}) rotate(0deg)` }, { opacity: 1, transform: `scale(${s}) rotate(8deg)`, offset: .45 }, { opacity: 0, transform: `scale(${s * 1.15}) rotate(10deg)` }], { duration: 230 });
 }
 
-function gift(atk, label, strength) {
-  S.combo[atk] += 1; S.combo[atk ^ 1] = 0;
-  const panel = $("s" + atk);
-  panel.querySelectorAll(".gift").forEach(g => g.remove());
-  const g = document.createElement("div");
-  g.className = "gift";
-  g.innerHTML = `<div class="avatar" style="--c:#fff">${avatarHTML(atk)}</div>
-    <div class="txt"><b>${nm(atk)}</b><br>送出 ${label}</div>
-    <svg class="item" viewBox="-40 -50 80 95"><use href="#palm" x="-30" y="-40" width="60" height="70" fill="${strength === "heavy" ? "#ff3b6b" : "#f6c933"}" stroke="#6e5530" stroke-width="3"/></svg>
-    <div class="combo"><small>×</small>${S.combo[atk]}</div>`;
-  panel.appendChild(g);
-  const dir = atk ? 1 : -1;
-  g.animate([{ transform: `translateX(${dir * 60}%)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1, offset: .15 }, { transform: "translateX(0)", opacity: 1, offset: .85 }, { opacity: 0 }],
-    { duration: 2400, easing: "ease-out", fill: "forwards" }).onfinish = () => g.remove();
-  g.querySelector(".combo").animate([{ transform: "scale(2)" }, { transform: "scale(1)" }], { duration: 300, easing: "cubic-bezier(.3,1.6,.5,1)" });
-  Sfx.gift();
+/* ---------------- moves ---------------- */
+// The attacker crosses the stage and hangs on the frame of contact. Returns ms to contact.
+function swing(from, connects = true) {
+  const f = $("f" + from), reach = (fighterX(1) - fighterX(0)) - cssPx("--h") * .72;
+  clearTimeout(f.poseH); setPose(from, "slap");
+  const dx = toward(from) * (connects ? reach : reach * 1.08);
+  f.animate([{ transform: "none" }, { transform: `translateX(${-dx * .05}px)`, offset: .16 }, { transform: `translateX(${dx}px)`, offset: .3 },
+    { transform: `translateX(${dx}px)`, offset: .56 }, { transform: "none" }], { duration: 640, easing: "cubic-bezier(.4,0,.2,1)" })
+    .onfinish = () => setPose(from, rest(from));
+  return 190;
 }
-
-// The attacker's own hand (olive-grey for 奶蛙, a paw for 奶狗...) reaches across the split screen to the other cheek. Returns ms to contact.
-function swing(from, to, connects = true) {
-  const h = $("hand"), a = charBox(from), b = cheekOf(to);
-  $("f" + from).classList.remove("windup");
-  $("handuse").setAttribute("fill", who(from).hand);
-  const hw = h.getBoundingClientRect().width || 100, dir = to > from ? 1 : -1;
-  const x0 = a.x + dir * a.w * 0.3 - hw / 2, x1 = b.x - dir * hw * (connects ? 0.15 : -1.2) - hw / 2, y = b.y - hw / 2;
-  h.animate([
-    { transform: `translate(${x0}px,${y - hw * .4}px) rotate(${-55 * dir}deg) scaleX(${dir})`, opacity: 0 },
-    { transform: `translate(${x0}px,${y - hw * .3}px) rotate(${-45 * dir}deg) scaleX(${dir})`, opacity: 1, offset: .15 },
-    { transform: `translate(${x1}px,${y}px) rotate(${8 * dir}deg) scaleX(${dir})`, opacity: 1, offset: .58 },
-    { transform: `translate(${x1 + dir * hw * .7}px,${y + hw * .15}px) rotate(${28 * dir}deg) scaleX(${dir})`, opacity: 0 },
-  ], { duration: 360, easing: "cubic-bezier(.5,0,.6,1)" });
-  return 210;
+function recoil(i, k) {
+  const f = $("f" + i), d = -toward(i);
+  f.animate([{ transform: "none" }, { transform: `translateX(${d * 90 * k}px) rotate(${d * 7 * k}deg)`, offset: .1 }, { transform: `translateX(${d * 130 * k}px) rotate(${d * 9 * k}deg)`, offset: .55 }, { transform: "none" }],
+    { duration: 780 + 320 * k, easing: "cubic-bezier(.15,.8,.25,1)" });
 }
-
-function squash(i, k) {   // jelly recoil away from the slap
-  const f = $("f" + i), body = f.querySelector(".body"), dir = i === 1 ? 1 : -1;
-  stopLaugh(i);
-  body.animate([
-    { transform: "none" },
-    { transform: `translateX(${dir * 5 * k}%) rotate(${dir * 10 * k}deg) scale(${1 - .1 * k},${1 + .07 * k})`, offset: .1 },
-    { transform: `translateX(${-dir * 2 * k}%) rotate(${-dir * 4 * k}deg) scale(${1 + .07 * k},${1 - .07 * k})`, offset: .35 },
-    { transform: `rotate(${dir * 3 * k}deg) scale(${1 - .04 * k},${1 + .04 * k})`, offset: .6 },
-    { transform: "none" },
-  ], { duration: 800 + 300 * k, easing: "cubic-bezier(.2,.9,.3,1)" });
-  f.classList.remove("ouch"); void f.offsetWidth; f.classList.add("ouch");
-  clearTimeout(f.ouchH); f.ouchH = setTimeout(() => f.classList.remove("ouch"), 1000);
-  const c = cheekOf(i), p = placeFx(i, ".print", c.x, c.y);
-  p.style.transform = `translate(-50%,-50%) rotate(${i ? -18 : 18}deg)`;
-  p.classList.add("show"); void p.getBoundingClientRect(); setTimeout(() => p.classList.remove("show"), 900);
-  Sfx.boing();
+function impact(def, k, crit) {   // a slap that lands cracks the fighter up for a moment (绷住值 drops)
+  stopLaugh(def);
+  holdPose(def, "hit", 620 + 260 * k, () => laugh(def, 420 + 420 * k));
+  recoil(def, k); burstAt(def, k); shake(k); Sfx.slap(k); Sfx.boing();
+  if (k >= 1 || crit) flash();
 }
-
-function dodge(i, cls) {
-  const body = $("f" + i).querySelector(".body"), dir = cls === "dodge_left" ? -1 : 1;
-  body.animate([{ transform: "none" }, { transform: `translateX(${dir * 17}%) rotate(${dir * 12}deg) scale(.94,1.05)`, offset: .2 },
-    { transform: `translateX(${dir * 14}%) rotate(${dir * 9}deg)`, offset: .6 }, { transform: "none" }], { duration: 720, easing: "cubic-bezier(.2,.9,.3,1)" });
+function dodge(i) {   // always away from the slap: on screen, left and right dodges read the same
+  const f = $("f" + i), d = -toward(i);
+  holdPose(i, "dodge", 720);
+  f.animate([{ transform: "none" }, { transform: `translateX(${d * 170}px)`, offset: .2 }, { transform: `translateX(${d * 150}px)`, offset: .62 }, { transform: "none" }],
+    { duration: 720, easing: "cubic-bezier(.2,.9,.3,1)" });
 }
-function guard(i) {   // both hands up in front of the face
-  const f = $("f" + i), c = facePoint(i, [0.5, who(i).cheek[1] + 0.04]);
-  placeFx(i, ".guardfx", c.x, c.y); f.classList.add("guarding"); clearTimeout(f.gH); f.gH = setTimeout(() => f.classList.remove("guarding"), 900);
-  f.querySelector(".body").animate([{ transform: "none" }, { transform: "scale(1.06,.94)", offset: .3 }, { transform: "none" }], { duration: 500 });
+function guard(i) {
+  holdPose(i, "block", 820);
+  $("f" + i).animate([{ transform: "none" }, { transform: `translateX(${-toward(i) * 36}px)`, offset: .2 }, { transform: "none" }], { duration: 480, easing: "ease-out" });
 }
-function daze(i) {   // stars circling over the head
-  const f = $("f" + i), c = facePoint(i, [0.5, 0]);
-  placeFx(i, ".stars", c.x, c.y); f.classList.add("dazed"); clearTimeout(f.dH); f.dH = setTimeout(() => f.classList.remove("dazed"), 1300);
-  f.querySelector(".body").animate([{ transform: "none" }, { transform: "rotate(-6deg)" }, { transform: "rotate(6deg)" }, { transform: "rotate(-4deg)" }, { transform: "none" }], { duration: 900 });
-}
-
-function impact(def, k, crit) {   // a slap that lands cracks the streamer up for a moment (绷住值 drops)
-  squash(def, k);
-  clearTimeout($("f" + def).crackH); $("f" + def).crackH = setTimeout(() => laugh(def, 700 + 600 * k), 450);
-  const c = cheekOf(def);
-  popText(c.x, c.y, pick(["啪", "啪！", "PIA"]));
-  shake(k); Sfx.slap(k);
-  if (k >= 1 || crit) flash(crit ? 0.55 : 0.35);
+function daze(i) {
+  holdPose(i, "dizzy", 1300);
+  $("f" + i).animate([{ transform: "none" }, { transform: "rotate(-5deg)" }, { transform: "rotate(5deg)" }, { transform: "rotate(-3deg)" }, { transform: "none" }], { duration: 1000 });
 }
 
 /* ---------------- referee messages ---------------- */
 function onResult(m, animate) {
   const atk = m.attacker, def = atk ^ 1, k = STRENGTH[m.strength] || 0.8;
-  const o = OUTCOME[m.outcome] || { big: m.outcome, cls: "", dm: [] };
+  const o = OUTCOME[m.outcome] || { zh: m.outcome, en: "", beat: "dull" };
   if (!animate) { setHp(m.hp, false); return; }
   const delta = m.delta_ms ? `反应 ${m.delta_ms} ms` : "";
-  const hitLabel = (STRENGTH_ZH[m.strength] || "") + "巴掌";
+  const land = (t, target, kk, crit, dmg) => setTimeout(() => {
+    impact(target, kk, crit); setHp(m.hp); popDamage(target, dmg); beat(o.beat, 1300);
+  }, t);
   switch (m.outcome) {
     case "HIT": case "JUMPED": {
-      const t = swing(atk, def);
-      setTimeout(() => { impact(def, k, false); setHp(m.hp); popDamage(def, m.damage, m.strength === "heavy" ? "痛击" : ""); }, t);
-      gift(atk, hitLabel, m.strength);
-      call(m.strength === "heavy" && m.outcome === "HIT" ? "痛击！" : o.big, o.cls, m.outcome === "JUMPED" ? `${nm(def)}动得太早，照吃` : delta);
+      const heavy = m.strength === "heavy" && m.outcome === "HIT";
+      land(swing(atk), def, k, false, m.damage);
+      call(heavy ? "痛击" : (STRENGTH_ZH[m.strength] === "轻" && m.outcome === "HIT" ? "轻轻一下" : o.zh), heavy ? "A heavy blow." : o.en, m.outcome === "JUMPED" ? `${nm(def)}动得太早，照吃` : delta);
       break;
     }
-    case "FEINT_PUNISHED": {
-      const t = swing(atk, def);
-      setTimeout(() => { impact(def, 1.2, true); setHp(m.hp); popDamage(def, m.damage, "暴击", true); }, t);
-      gift(atk, "假动作+真巴掌", "heavy");
-      call(o.big, o.cls, `${nm(def)}信了假动作`);
+    case "FEINT_PUNISHED":
+      land(swing(atk), def, 1.2, true, m.damage);
+      call(o.zh, o.en, `${nm(def)}信了假动作`);
       break;
-    }
-    case "GRAZE": {
-      dodge(def, m.defense);
-      const t = swing(atk, def);
-      setTimeout(() => { impact(def, 0.4, false); setHp(m.hp); popDamage(def, m.damage, "擦到"); }, t);
-      call(o.big, o.cls, "闪反方向了，扣一半");
+    case "GRAZE":
+      dodge(def);
+      land(swing(atk), def, 0.4, false, m.damage);
+      call(o.zh, o.en, "闪反方向了，扣一半");
       break;
-    }
-    case "BLOCKED": {
-      const t = swing(atk, def);
-      setTimeout(() => { guard(def); Sfx.slap(0.35); shake(0.25); setHp(m.hp); popDamage(def, m.damage, "格挡"); }, t);
-      call(o.big, o.cls, "伤害减半，不能反击");
+    case "BLOCKED":
+      setTimeout(() => { guard(def); Sfx.slap(0.35); shake(0.25); setHp(m.hp); popDamage(def, m.damage); beat(o.beat, 1100); }, swing(atk));
+      call(o.zh, o.en, "伤害减半，不能反击");
       break;
-    }
-    case "MISS": {
-      dodge(def, m.defense); swing(atk, def, false); Sfx.whoosh();
-      call(o.big, o.cls, delta ? `${delta}，可以反击` : "");
+    case "MISS":
+      dodge(def); swing(atk, false); Sfx.whoosh(); beat(o.beat, 1100);
+      call(o.zh, o.en, delta ? `${delta}，可以反击` : "");
       break;
-    }
-    case "COUNTERED": {
-      dodge(def, m.defense); swing(atk, def, false); Sfx.whoosh();
-      setTimeout(() => {
-        const t = swing(def, atk);
-        setTimeout(() => { impact(atk, 1.1, true); setHp(m.hp); popDamage(atk, m.counter_damage, "反击", true); }, t);
-        gift(def, "反击巴掌", "heavy");
-      }, 440);
-      call(o.big, o.cls, `${nm(def)}闪开后反手一巴掌`, 1500);
+    case "COUNTERED":
+      dodge(def); swing(atk, false); Sfx.whoosh();
+      setTimeout(() => land(swing(def), atk, 1.1, true, m.counter_damage), 640);
+      call(o.zh, o.en, `${nm(def)}闪开后反手一巴掌`, 1700);
       break;
-    }
     case "FEINT_FOOLED": case "FEINT_HELD":
-      daze(def); setHp(m.hp); Sfx.whoosh(0.15); call(o.big, o.cls, m.outcome === "FEINT_FOOLED" ? "下回合防守时间变短" : "");
+      daze(def); setHp(m.hp); Sfx.whoosh(0.15); beat(o.beat, 1100);
+      call(o.zh, o.en, m.outcome === "FEINT_FOOLED" ? "下回合防守时间变短" : "");
       break;
     default:
-      setHp(m.hp); Sfx.ding(392, 0, 0.12); Sfx.ding(330, 0.14, 0.12); call(o.big, o.cls, "换人");
+      setHp(m.hp); Sfx.ding(392, 0, 0.12); Sfx.ding(330, 0.14, 0.12); beat(o.beat, 1100); call(o.zh, o.en, "换人");
   }
-  crowd(o.dm, m.outcome === "COUNTERED" || m.strength === "heavy" ? 5 : 3);
 }
 
 function onGameOver(m, animate) {
@@ -712,66 +612,57 @@ function onGameOver(m, animate) {
   setHp(m.hp, animate);
   const loser = m.winner ^ 1, secs = S.startedAt ? Math.round((performance.now() - S.startedAt) / 1000) : null;
   const show = () => {
-    const lf = $("f" + loser);
-    clearTimeout(lf.crackH); lf.classList.add("lol"); laugh(loser); setTimeout(() => lf.classList.add("bent"), 1800);
-    for (const i of [0, 1]) {
-      const st = document.createElement("div");
-      st.className = "stamp " + (i === m.winner ? "win" : "lose"); st.textContent = i === m.winner ? "胜" : "败";
-      $("s" + i).appendChild(st);
-      if (animate) st.animate([{ transform: "translate(-50%,-50%) rotate(-14deg) scale(2.4)", opacity: 0 }, { transform: "translate(-50%,-50%) rotate(-14deg) scale(1)", opacity: 1 }],
-        { duration: 320, delay: i === m.winner ? 0 : 160, easing: "cubic-bezier(.3,1.5,.5,1)", fill: "backwards" });
-    }
-    $("endline").innerHTML = secs != null
-      ? `${nm(m.winner)}在绷不住大赛中坚持了<b>${secs}</b>秒`
-      : `${nm(m.winner)}绷住了，${nm(loser)}没绷住`;
-    $("end").classList.remove("hidden");
-    if (animate) {
-      $("end").querySelector(".t").animate([{ transform: "scale(.2) rotate(-10deg)", opacity: 0 }, { transform: "scale(1.1) rotate(2deg)", opacity: 1, offset: .6 }, { transform: "scale(1)", opacity: 1 }],
-        { duration: 600, easing: "cubic-bezier(.3,1.6,.5,1)", fill: "forwards" });
-      flash(0.6); shake(1.1); Sfx.laugh(2.6);
-      for (let k = 0; k < 14; k++) danmaku(pick(["哈哈哈哈哈哈", "绷不住了", "笑死", "哈哈哈哈哈哈哈哈", `${nm(loser)}已经笑疯了`, "我也绷不住了", "咳哈哈哈哈"]), { delay: k * 180, y: k % 3 === 0, big: k % 4 === 0, speed: 4200 });
-    }
-    setRoles();
+    beat("over"); stage.dataset.loser = loser;
+    laugh(loser); clearTimeout($("f" + m.winner).poseH); setPose(m.winner, "win");
+    call("绷不住了", "Composure, lost.", "", 0);
+    $("sensor").textContent = secs != null ? `${nm(m.winner)}在绷不住大赛中坚持了 ${secs} 秒 · 按空格再来一局` : `${nm(m.winner)}绷住了，${nm(loser)}没绷住`;
+    if (animate) { flash(); shake(1.1); Sfx.laugh(2.6); }
+    setRoles(); syncPlaying();
   };
-  if (animate) setTimeout(show, 900); else show();
+  if (animate) setTimeout(show, 1000); else show();
 }
 
 function resetBoard() {
-  S.over = false; S.round = 0; S.deadline = 0; S.combo = [0, 0];
-  $("end").classList.add("hidden");
-  document.querySelectorAll(".stamp, .gift").forEach(e => e.remove());
-  for (const i of [0, 1]) { const f = $("f" + i); clearTimeout(f.crackH); stopLaugh(i); f.classList.remove("lol", "bent", "ouch", "guarding", "dazed", "windup"); }
-  setHp([100, 100], false);
+  S.over = false; S.round = 0; S.deadline = 0; S.winner = null;
+  $("call").innerHTML = ""; clearTimeout(call.h);
+  delete stage.dataset.loser;
+  for (const i of [0, 1]) { stopLaugh(i); setPose(i, "idle"); }
+  setHp([100, 100], false); beat("ready");
+}
+function idleLine() { $("sensor").textContent = "按空格开局 · 1 / 2 换角色 · T 换风格" + (S.mode === "keys" ? " · 两人一台键盘" : ""); }
+function syncPlaying() {
+  const waiting = S.state === "IDLE" && !S.over;
+  stage.classList.toggle("waiting", waiting);
+  $("title").classList.toggle("hidden", !waiting);
 }
 
 function handle(m, animate = true) {
   switch (m.type) {
     case "peer": {
-      const i = playerOf(m.name), live = $("live" + i), was = live.classList.contains("on");
-      live.classList.toggle("on", !!m.connected); live.textContent = m.connected ? "连麦中" : "未连麦";
+      const i = playerOf(m.name), link = $("link" + i), was = !link.classList.contains("off");
+      link.classList.toggle("off", !m.connected); link.textContent = m.connected ? "已连接" : "未连接";
       $("dev" + i).textContent = m.name;
-      if (animate && was !== !!m.connected) toast(`${nm(i)}${m.connected ? "连上麦了" : "掉线了"}（${m.name}）`);
+      if (animate && was !== !!m.connected) toast(`${nm(i)}${m.connected ? "连上了" : "掉线了"}（${m.name}）`);
       break;
     }
     case "state":
       S.state = m.state;
-      if (m.state === "IDLE") resetBoard();
+      if (m.state === "IDLE") { resetBoard(); idleLine(); }
       if (m.state === "ARMED" && !S.deadline) S.deadline = performance.now() + ATTACK_TIMEOUT_MS;
       S.judging = m.state === "JUDGING";
-      for (const i of [0, 1]) $("f" + i).classList.toggle("windup", m.state === "ARMED" && i === S.attacker && !!who(i).windup);
       if (m.state !== "ARMED" && m.state !== "JUDGING") S.deadline = 0;
-      $("idle").classList.toggle("hidden", m.state !== "IDLE");
-      setRoles();
+      if (!S.over && m.state === "ARMED") setPose(S.attacker, "windup");
+      if (["ready", "armed"].includes(stage.dataset.beat)) stage.dataset.beat = baseBeat();
+      setRoles(); syncPlaying();
       break;
     case "announce":
       if (m.round === 1) { resetBoard(); S.startedAt = performance.now(); }
       S.round = m.round; S.attacker = m.attacker; S.deadline = 0;
-      $("idle").classList.add("hidden");
-      setRoles();
+      setRoles(); syncPlaying();
+      $("sensor").textContent = "";
       if (animate) {
-        call(`第 ${m.round} 回合`, "", `${nm(m.attacker)}出手`, 1000);
-        if (m.round === 1) { Sfx.ding(784); Sfx.ding(1046, .12); danmaku("开打了开打了", { y: true }); danmaku("前排围观", { delay: 400 }); }
-        else Sfx.ding(880);
+        call(`第 ${m.round} 回合`, `Round ${m.round}`, `${nm(m.attacker)}出手`, 1000);
+        Sfx.ding(m.round === 1 ? 784 : 880); if (m.round === 1) Sfx.ding(1046, .12);
       }
       break;
     case "result": onResult(m, animate); break;
@@ -784,45 +675,42 @@ function handle(m, animate = true) {
   }
 }
 
+// Every event the boards detect is shown as it came in: this line is the on-device inference, in the open.
 function addEvent(m) {
   const i = playerOf(m.from);
-  chat(nm(i), CLS[m.cls] || m.cls, `${Math.round((m.conf / 255) * 100)}% · ${m.peak}°/s · 延迟 ${m.rx - m.t} ms`, i);
-  const f = $("f" + i); f.classList.add("glow"); clearTimeout(f.glowH); f.glowH = setTimeout(() => f.classList.remove("glow"), 220);
+  if (!S.over) $("sensor").textContent = `${nm(i)} · ${CLS[m.cls] || m.cls} ${Math.round((m.conf / 255) * 100)}% · ${m.peak}°/s · 延迟 ${m.rx - m.t} ms`;
   if (m.cls === "forehand" || m.cls === "backhand" || m.cls === "feint") Sfx.whoosh(0.12);
 }
 
-/* ---------------- PK clock ---------------- */
+/* ---------------- round clock ---------------- */
 function tick() {
-  const b = $("pkbadge"), c = $("clock");
+  const mid = $("mid"), r = $("round"), c = $("clock");
   if (S.deadline) {
     const left = Math.max(0, S.deadline - performance.now());
-    b.classList.toggle("urgent", left < 1500 && !S.judging);
-    c.innerHTML = S.judging ? `第 ${S.round} 回合 · 判定中` : `${nm(S.attacker)}出手 <b>${(left / 1000).toFixed(1)}</b> 秒`;
+    mid.classList.toggle("urgent", left < 1500 && !S.judging);
+    r.textContent = S.judging ? `第 ${S.round} 回合 · 判定中` : `第 ${S.round} 回合 · ${nm(S.attacker)}出手`;
+    c.textContent = S.judging ? "" : (left / 1000).toFixed(1);
   } else {
-    b.classList.remove("urgent");
-    c.textContent = S.over ? "本场结束" : S.state === "IDLE" ? "等待开局" : S.round ? `第 ${S.round} 回合` : "准备";
+    mid.classList.remove("urgent"); c.textContent = "";
+    r.textContent = S.over ? "本场结束" : S.state === "IDLE" ? "等待开局" : S.round ? `第 ${S.round} 回合` : "准备";
   }
   requestAnimationFrame(tick);
 }
 
 /* ---------------- keyboard play ---------------- */
-function setMode(mode) {
-  S.mode = mode;
-  $("keys").classList.toggle("hidden", mode !== "keys");
-  $("gohint").textContent = mode === "keys" ? "按空格开局 · 两人一台键盘" : "按空格开局";
-}
+function setMode(mode) { S.mode = mode; $("keys").classList.toggle("hidden", mode !== "keys"); if (S.state === "IDLE") idleLine(); }
 function buildLegend() {
   const label = { feint: "假动作", forehand: "正手", backhand: "反手", dodge_left: "左闪", block: "格挡", dodge_right: "右闪" };
   const box = $("keys");
   for (const i of [0, 1]) {
-    const w = document.createElement("div"); w.className = "who p" + i; w.textContent = nm(i); box.appendChild(w);
+    const w = document.createElement("b"); w.className = "who" + i; box.appendChild(w);
     for (const cls of ["feint", "forehand", "backhand", "dodge_left", "block", "dodge_right"]) {
       const code = Object.keys(KEYMAP).find(c => KEYMAP[c][0] === i && KEYMAP[c][1] === cls);
-      const d = document.createElement("div"); d.className = "k"; d.id = "k-" + code;
+      const d = document.createElement("span"); d.className = "k"; d.id = "k-" + code;
       d.innerHTML = `<kbd>${code.slice(3)}</kbd>${label[cls]}`; box.appendChild(d);
     }
   }
-  const h = document.createElement("div"); h.className = "hint"; h.textContent = "按住 Shift 痛击，Alt 轻打；正手往右闪，反手往左闪"; box.appendChild(h);
+  const h = document.createElement("span"); h.className = "hint"; h.textContent = "按住 Shift 痛击，Alt 轻打；正手往右闪，反手往左闪；比赛中按 H 看按键"; box.appendChild(h);
 }
 function keyAction(e) {
   const k = KEYMAP[e.code];
@@ -842,19 +730,21 @@ async function send(cmd, quiet = false) {
   } catch (e) { if (!quiet) toast("指令没送出去：web_dashboard.py 有在跑吗？"); }
 }
 document.querySelectorAll("[data-cmd]").forEach(b => b.addEventListener("click", () => send(b.dataset.cmd)));
-function toggleMute() { Sfx.wake(); Sfx.muted = !Sfx.muted; $("mute").classList.toggle("off", Sfx.muted); $("mute").querySelector(".lb").textContent = Sfx.muted ? "已静音" : "音效"; }
+function toggleMute() { Sfx.wake(); Sfx.muted = !Sfx.muted; $("mute").classList.toggle("off", Sfx.muted); }
 function toggleFs() { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
-function press(sel) { const t = document.querySelector(sel); if (t) { t.classList.add("press"); setTimeout(() => t.classList.remove("press"), 120); } }
 $("mute").addEventListener("click", toggleMute);
 $("fs").addEventListener("click", toggleFs);
+$("themebtn").addEventListener("click", nextTheme);
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (keyAction(e)) { e.preventDefault(); return; }
-  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); press("[data-cmd=start]"); send("start"); }
-  else if (e.code === "Digit1" || e.code === "Digit2") cycleStreamer(e.code === "Digit1" ? 0 : 1);
-  else if (e.code === "KeyR") { press("[data-cmd=reset]"); send("reset"); }
-  else if (e.code === "KeyM") { press("#mute"); toggleMute(); }
-  else if (e.code === "KeyF") { press("#fs"); toggleFs(); }
+  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); send("start"); }
+  else if (e.code === "Digit1" || e.code === "Digit2") cycle(e.code === "Digit1" ? 0 : 1);
+  else if (e.code === "KeyR") send("reset");
+  else if (e.code === "KeyT") nextTheme();
+  else if (e.code === "KeyH") stage.classList.toggle("legend");
+  else if (e.code === "KeyM") toggleMute();
+  else if (e.code === "KeyF") toggleFs();
 });
 document.addEventListener("keyup", (e) => { if (e.key === "Alt") e.preventDefault(); });   // keep Alt from opening the browser menu
 document.addEventListener("pointerdown", () => Sfx.wake(), { once: true });
@@ -866,11 +756,19 @@ function connect() {
   es.onmessage = (ev) => { try { handle(JSON.parse(ev.data)); } catch (err) { console.error(err, ev.data); } };
   es.onerror = () => $("offline").classList.remove("hidden");
 }
-buildLegend();
-for (const i of [0, 1]) { setStreamer(i); $("av" + i).addEventListener("click", () => cycleStreamer(i)); }
-setHp([100, 100], false);
-requestAnimationFrame(tick);
-connect();
+async function boot() {
+  let theme = "c";
+  try { theme = localStorage.getItem("slap.theme") || "c"; } catch (e) {}
+  setTheme(THEMES[theme] ? theme : "c", true);
+  fitStage(); buildLegend();
+  MAN = await (await fetch("/chars/manifest.json")).json();
+  PICK = loadPick();
+  for (const i of [0, 1]) buildFighter(i);
+  setHp([100, 100], false); idleLine(); syncPlaying();
+  requestAnimationFrame(tick);
+  connect();
+}
+boot();
 </script>
 </body>
 </html>
