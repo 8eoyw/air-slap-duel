@@ -158,6 +158,7 @@ make -C tests keys && python tools/web_dashboard.py --keys # 没有硬件：两�
 | 训练时攻守两任务互为 background（防止闪避被认成巴掌） | ✅ `Config.cross_negatives`，默认开 |
 | nano_hub 备案 | ✅ 编译通过，未上板 |
 | 小智 ESP-IDF 组件 + standalone | ✅ 在 Goouuu ESP32-S3-CAM 上实测：2.6 s 连上 SLAP-P1、free heap ~272 KB 稳定、dashboard 双向（`start` → 完整回合）；连线间隔未确认 |
+| 回合反馈 Cue（裁判 → 玩家板，板载 RGB 灯） | ✅ 单元测试通过、Nano 端编译通过；ESP32 端只做了语法检查，未上板 |
 | 判定宽限 `BLE_GRACE_MS` | ✅ 150 → 600 ms：事件晚 ~515 ms 才到，150 会让所有防守都判太晚（全部 HIT） |
 | PC 模拟比赛 `tools/sim_match.cpp` | ✅ 用同一份裁判核心，`make -C tests sim`，可接 `dashboard.py --stdin` |
 | xiaozhi_glue | ⚠️ 依 xiaozhi-esp32 v1.x–v2.x API 写的，需对照你们的版本 |

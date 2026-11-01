@@ -2,6 +2,7 @@
 // BLE central for both wearables, runs the referee core, and prints game events
 // as JSON lines on USB Serial and on Serial1 (TX pin D1) for the XiaoZhi board
 // to render (face, TTS, servo). XiaoZhi then only needs a UART reader.
+// After each round it writes a cue (hit / dodge / ...) back to each wearable.
 //
 // Commands accepted on either serial port (one per line):
 //   start | announce_done | swap_done | reset
@@ -16,12 +17,14 @@ struct Peer {
   const char* name;        // role board name
   const char* player_name; // player board name for the same slot
   BLEDevice dev;
-  BLECharacteristic event, sync;
+  BLECharacteristic event, sync, cue;  // cue is missing on boards flashed before it existed
   bool ready = false;
   bool player_board = false;
   const char* shown() const { return player_board ? player_name : name; }
 };
 Peer peers[2] = {{SLAP_NAME_ATTACKER, SLAP_NAME_P1}, {SLAP_NAME_DEFENDER, SLAP_NAME_P2}};
+
+void sendCues(const RoundResult& r);
 
 // ---- JSON output --------------------------------------------------------
 void emit(const String& line) {
@@ -43,6 +46,7 @@ struct JsonOut : RefereeOutput {
          "\",\"defense\":\"" + slapClassName(r.defense_cls) + "\",\"delta_ms\":" + r.delta_ms +
          ",\"damage\":" + r.damage + ",\"counter_damage\":" + r.counter_damage + ",\"attacker\":" + r.attacker + ",\"hp\":[" + r.hp[0] + "," +
          r.hp[1] + "]}");
+    sendCues(r);
   }
   void onSwap(uint8_t next) override {
     emit(String("{\"type\":\"swap\",\"attacker\":") + next + "}");
@@ -59,6 +63,7 @@ bool setupPeer(Peer& p, BLEDevice d, bool player_board) {
   if (!d.discoverService(SLAP_SERVICE_UUID)) { d.disconnect(); return false; }
   p.event = d.characteristic(SLAP_EVENT_UUID);
   p.sync = d.characteristic(SLAP_SYNC_UUID);
+  p.cue = d.characteristic(SLAP_CUE_UUID);
   if (!p.event || !p.sync || !p.event.subscribe()) { d.disconnect(); return false; }
   p.dev = d;
   p.ready = true;
@@ -119,6 +124,15 @@ void sendSync(uint32_t now) {
   SlapSync s{now};
   for (Peer& p : peers)
     if (p.ready) p.sync.writeValue(&s, sizeof(s), false);
+}
+
+void sendCues(const RoundResult& r) {
+  for (int i = 0; i < 2; i++) {
+    Peer& p = peers[i];
+    if (!p.ready || !p.cue) continue;
+    SlapCue c = RefereeCore::cueForSlot(r, i, ref.playerBoards());
+    if (c.kind != CUE_NONE) p.cue.writeValue(&c, sizeof(c), false);
+  }
 }
 
 // ---- commands -----------------------------------------------------------

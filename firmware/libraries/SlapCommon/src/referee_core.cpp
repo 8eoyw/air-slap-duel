@@ -212,6 +212,30 @@ uint8_t RefereeCore::counterDamage(const SlapEvent& dodged, const SlapEvent& cou
   return base * COUNTER_MULT_NUM / COUNTER_MULT_DEN;
 }
 
+SlapCue RefereeCore::cueFor(const RoundResult& r, uint8_t player) {
+  SlapCue c = {CUE_NONE, 0};
+  if ((player & 1) == r.attacker) {
+    if (r.outcome == OUT_COUNTERED) c = {CUE_COUNTER, 3};
+    return c;
+  }
+  switch (r.outcome) {
+    case OUT_HIT:
+    case OUT_JUMPED:         c = {CUE_HIT, (uint8_t)(r.strength + 1)}; break;
+    case OUT_FEINT_PUNISHED: c = {CUE_HIT, 3}; break;  // crit
+    case OUT_GRAZE:
+    case OUT_BLOCKED:        c = {CUE_HALF, 1}; break;
+    case OUT_MISS:
+    case OUT_COUNTERED:      c = {CUE_DODGE, 1}; break;
+    default:                 break;  // feint fooled / timeout: nothing hit anyone
+  }
+  return c;
+}
+
+SlapCue RefereeCore::cueForSlot(const RoundResult& r, uint8_t slot, bool player_boards) {
+  uint8_t player = player_boards ? (slot & 1) : (slot == 0 ? r.attacker : r.attacker ^ 1);
+  return cueFor(r, player);
+}
+
 RoundResult RefereeCore::judge(const SlapEvent& atk, const SlapEvent* def, bool feinted_before,
                                bool attacker_left_handed) {
   RoundResult r = {};

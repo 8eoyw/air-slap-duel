@@ -9,6 +9,7 @@
 #define SLAP_SYNC_UUID    "5a1a0002-8c3b-4f7e-9d2a-000000000001"  // write w/o response
 #define SLAP_ROLE_UUID    "5a1a0003-8c3b-4f7e-9d2a-000000000001"  // read
 #define SLAP_RAW_UUID     "5a1a0004-8c3b-4f7e-9d2a-000000000001"  // notify, experiment 3 only
+#define SLAP_CUE_UUID     "5a1a0005-8c3b-4f7e-9d2a-000000000001"  // write w/o response, referee -> player
 
 // Role boards (players swap them every round; no counters).
 #define SLAP_NAME_ATTACKER "SLAP-ATK"
@@ -48,6 +49,16 @@ inline const char* slapClassName(uint8_t c) {
 inline bool slapIsAttack(uint8_t c) { return c >= CLS_FOREHAND && c <= CLS_FEINT; }
 inline bool slapIsDefense(uint8_t c) { return c >= CLS_DODGE_LEFT && c <= CLS_BLOCK; }
 
+// What the referee tells a wearable after a round, so the player feels or sees it.
+// The node decides how to show it (onboard RGB LED today, a vibration motor later).
+enum SlapCueKind : uint8_t {
+  CUE_NONE    = 0,
+  CUE_HIT     = 1,  // you took a full hit; count = strength tier + 1
+  CUE_HALF    = 2,  // grazed or blocked: half damage
+  CUE_DODGE   = 3,  // clean dodge
+  CUE_COUNTER = 4,  // the defender slapped you back
+};
+
 #pragma pack(push, 1)
 struct SlapEvent {
   uint32_t t_onset;  // ms, already converted to the referee clock
@@ -57,6 +68,10 @@ struct SlapEvent {
 };
 struct SlapSync {
   uint32_t referee_ms;
+};
+struct SlapCue {
+  uint8_t kind;   // SlapCueKind
+  uint8_t count;  // flashes / pulses, 1..3
 };
 // One raw IMU sample, int16 fixed point: accel in mg, gyro in 0.1 dps.
 // 14 bytes fits the default 20-byte ATT payload.
@@ -69,3 +84,4 @@ struct SlapRawSample {
 
 static_assert(sizeof(SlapEvent) == 8, "SlapEvent must stay 8 bytes");
 static_assert(sizeof(SlapRawSample) == 14, "SlapRawSample must stay 14 bytes");
+static_assert(sizeof(SlapCue) == 2, "SlapCue must stay 2 bytes");

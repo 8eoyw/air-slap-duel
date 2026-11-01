@@ -96,6 +96,11 @@ class RefereeCore {
   static uint8_t damageFor(RefStrength s);
   // Damage the attacker takes from a counter slap after `dodged` was dodged.
   static uint8_t counterDamage(const SlapEvent& dodged, const SlapEvent& counter);
+  // Cue for one player after a round (CUE_NONE: nothing to show).
+  static SlapCue cueFor(const RoundResult& r, uint8_t player);
+  // Same, addressed by BLE slot: player boards sit in their player's slot,
+  // role boards in slot 0 = attacker device, slot 1 = defender device.
+  static SlapCue cueForSlot(const RoundResult& r, uint8_t slot, bool player_boards);
 
  private:
   void enter(RefState s, uint32_t now);

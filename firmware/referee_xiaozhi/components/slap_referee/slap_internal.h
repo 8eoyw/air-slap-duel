@@ -18,6 +18,7 @@ void slap_post(const SlapMsg& m);
 // BLE mode
 void slap_ble_start();
 void slap_ble_send_sync(uint32_t referee_ms);
+void slap_ble_send_cue(uint8_t slot, const SlapCue& cue);
 
 // UART mode
 void slap_uart_start(SlapFeedback* fb);

@@ -27,6 +27,22 @@ const char* slot_name(uint8_t slot) {
 
 #if CONFIG_SLAP_MODE_BLE
 RefereeCore* g_core;
+
+// Sits between the core and the platform feedback: passes everything on and,
+// after each round, writes a cue to each wearable (RGB LED / motor on the Nano).
+struct CueOutput : RefereeOutput {
+  void onState(RefState s) override { g_fb->onState(s); }
+  void onAnnounce(uint8_t attacker, uint8_t round) override { g_fb->onAnnounce(attacker, round); }
+  void onResult(const RoundResult& r) override {
+    g_fb->onResult(r);
+    for (uint8_t slot = 0; slot < 2; slot++) {
+      SlapCue c = RefereeCore::cueForSlot(r, slot, g_core->playerBoards());
+      if (c.kind != CUE_NONE) slap_ble_send_cue(slot, c);
+    }
+  }
+  void onSwap(uint8_t next) override { g_fb->onSwap(next); }
+  void onGameOver(uint8_t winner, const int16_t hp[2]) override { g_fb->onGameOver(winner, hp); }
+} g_cue_out;
 #endif
 
 void referee_task(void*) {
@@ -110,7 +126,7 @@ void slap_referee_start(SlapFeedback* feedback) {
   g_fb = feedback;
   g_queue = xQueueCreate(16, sizeof(SlapMsg));
 #if CONFIG_SLAP_MODE_BLE
-  g_core = new RefereeCore(feedback);
+  g_core = new RefereeCore(&g_cue_out);
 #endif
   slap_servo_init();
   xTaskCreate(referee_task, "slap_ref", 4096, nullptr, 5, nullptr);

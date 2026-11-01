@@ -14,6 +14,7 @@
 //   EVT,<t_local_ms>,<t_ref_ms>,<cls>,<conf>,<peak_dps>,<infer_us>[,<tag>]
 //   REJ,<t_local_ms>,<cls>,<conf>,<infer_us>[,<tag>]   (background or low confidence)
 //   SYNC,<offset_ms>,<median_offset_ms>
+//   CUE,<kind>,<count>        (referee feedback after a round, shown on the RGB LED)
 // <tag> (pipeline name) is only printed when the node runs more than one pipeline.
 #pragma once
 #include <Arduino.h>
@@ -73,7 +74,8 @@ class SlapNode {
         eventChar_(SLAP_EVENT_UUID, BLENotify, sizeof(SlapEvent)),
         syncChar_(SLAP_SYNC_UUID, BLEWriteWithoutResponse | BLEWrite, sizeof(SlapSync)),
         roleChar_(SLAP_ROLE_UUID, BLERead),
-        rawChar_(SLAP_RAW_UUID, BLENotify, sizeof(SlapRawSample)) {
+        rawChar_(SLAP_RAW_UUID, BLENotify, sizeof(SlapRawSample)),
+        cueChar_(SLAP_CUE_UUID, BLEWriteWithoutResponse | BLEWrite, sizeof(SlapCue)) {
     self_ = this;
     nPipes_ = n < SLAP_MAX_PIPELINES ? n : SLAP_MAX_PIPELINES;
     for (int i = 0; i < nPipes_; i++) pipes_[i].cfg = pipes[i];
@@ -101,9 +103,11 @@ class SlapNode {
     service_.addCharacteristic(syncChar_);
     service_.addCharacteristic(roleChar_);
     service_.addCharacteristic(rawChar_);
+    service_.addCharacteristic(cueChar_);
     BLE.addService(service_);
     roleChar_.writeValue((uint8_t)role_);
     syncChar_.setEventHandler(BLEWritten, onSyncThunk);
+    cueChar_.setEventHandler(BLEWritten, onCueThunk);
     BLE.setEventHandler(BLEConnected, onConnThunk);
     BLE.setEventHandler(BLEDisconnected, onDiscThunk);
     // 7.5–15 ms connection interval (units of 1.25 ms); the central has the final say.
@@ -265,6 +269,46 @@ class SlapNode {
     Serial.print("SYNC,"); Serial.print(off); Serial.print(','); Serial.println(medianOffset());
   }
 
+  // Cue patterns on the onboard RGB LED: colour, on and off time per flash.
+  struct CueLook { bool r, g, b; uint16_t on_ms, off_ms; };
+  static CueLook cueLook(uint8_t kind) {
+    switch (kind) {
+      case CUE_HIT:     return {1, 0, 0, 150, 150};  // red, one flash per strength tier
+      case CUE_HALF:    return {1, 1, 0, 150, 150};  // yellow
+      case CUE_DODGE:   return {0, 0, 1, 300, 150};  // blue
+      case CUE_COUNTER: return {1, 0, 0, 80, 80};    // fast red
+      default:          return {0, 0, 0, 0, 0};
+    }
+  }
+
+  void onCue(BLECharacteristic& c) {
+    SlapCue q;
+    if (c.valueLength() < (int)sizeof(q)) return;
+    memcpy(&q, c.value(), sizeof(q));
+    if (q.kind == CUE_NONE || q.kind > CUE_COUNTER) return;
+    q.count = constrain(q.count, 1, 3);
+    cue_ = q;
+    cueStep_ = 0;
+    cueAt_ = millis();
+    Serial.print("CUE,"); Serial.print(q.kind); Serial.print(','); Serial.println(q.count);
+  }
+
+  // Non-blocking: one step per call when due, even steps on, odd steps off.
+  void runCue() {
+    if (cue_.kind == CUE_NONE || (int32_t)(millis() - cueAt_) < 0) return;
+    if (cueStep_ >= cue_.count * 2) {
+      cue_.kind = CUE_NONE;
+      rgb(0, 1, 0);  // back to "connected"
+      return;
+    }
+    CueLook l = cueLook(cue_.kind);
+    bool on = (cueStep_ % 2) == 0;
+    if (on) rgb(l.r, l.g, l.b);
+    else    rgb(0, 0, 0);
+    cueAt_ = millis() + (on ? l.on_ms : l.off_ms);
+    cueStep_++;
+  }
+
   void rgb(bool r, bool g, bool b) {
 #ifdef LEDR
     digitalWrite(LEDR, r ? LOW : HIGH);  // active low
@@ -274,20 +318,23 @@ class SlapNode {
   }
 
   static void onSyncThunk(BLEDevice, BLECharacteristic c) { self_->onSync(c); }
+  static void onCueThunk(BLEDevice, BLECharacteristic c) { self_->onCue(c); }
   static void onConnThunk(BLEDevice d) {
     self_->rgb(0, 1, 0);
     self_->nOffsets_ = 0;  // new central, new clock
     Serial.print("INFO,connected="); Serial.println(d.address());
   }
   static void onDiscThunk(BLEDevice) {
+    self_->cue_.kind = CUE_NONE;  // a running cue would turn the LED back to green
     self_->rgb(1, 0, 0);
     Serial.println("INFO,disconnected=1");
     BLE.advertise();
   }
 
  public:
-  // Call from loop() too; turns the event LED off without blocking.
+  // Call from loop() too; turns the event LED off and plays cues without blocking.
   void service() {
+    runCue();
     if (ledOffAt_ && (int32_t)(millis() - ledOffAt_) >= 0) {
       digitalWrite(LED_BUILTIN, LOW);
       ledOffAt_ = 0;
@@ -303,6 +350,10 @@ class SlapNode {
   BLECharacteristic eventChar_, syncChar_;
   BLEByteCharacteristic roleChar_;
   BLECharacteristic rawChar_;
+  BLECharacteristic cueChar_;
+  SlapCue cue_ = {CUE_NONE, 0};
+  int cueStep_ = 0;
+  uint32_t cueAt_ = 0;
 
   float ring_[RING][6];
   int head_ = 0, count_ = 0;

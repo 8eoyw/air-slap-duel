@@ -12,6 +12,7 @@ Nano 是 peripheral，裁判（小智或 nano_hub）是 central。定义在
 | Sync | `5a1a0002-…-000000000001` | Write / Write w/o response | 裁判时间 beacon |
 | Role | `5a1a0003-…-000000000001` | Read | 0 = 攻击者，1 = 防守者，2 = 玩家板（攻防两个模型） |
 | Raw | `5a1a0004-…-000000000001` | Notify | 只在 `-DSLAP_STREAM_RAW` 编译时发送（实验 3） |
+| Cue | `5a1a0005-…-000000000001` | Write / Write w/o response | 裁判每回合结束后写入的反馈，见下方「回合反馈」 |
 
 广播名称：玩家板 `SLAP-P1` / `SLAP-P2`（`nano_player`），单角色板 `SLAP-ATK` / `SLAP-DEF`。
 裁判的槽位 0 接 `SLAP-P1` 或 `SLAP-ATK`，槽位 1 接 `SLAP-P2` 或 `SLAP-DEF`；连上玩家板时事件按玩家编号路由、跳过交换装备。
@@ -31,6 +32,28 @@ ArduinoBLE 把名称放在 scan response 里，central 要用主动扫描。
 `SLAP_WINDOW - SLAP_PRE` 个样本才推论，所以到达裁判时已经晚约 0.5 s + 推论 + BLE；
 裁判判定只看时间戳差，不受这段延迟影响。
 
+## 回合反馈（Cue，2 bytes）
+
+| offset | 类型 | 字段 | 说明 |
+|---|---|---|---|
+| 0 | `uint8` | `kind` | `SlapCueKind` |
+| 1 | `uint8` | `count` | 闪几下，1–3 |
+
+裁判出结果后按 `RefereeCore::cueForSlot()` 给两块板各写一次，`CUE_NONE` 不写。
+节点目前用板载 RGB 灯显示，闪完回到绿色（已连线）；以后换震动马达只改节点端，协定不变。
+
+| 结果 | 收到的一方 | `kind` | 板载 RGB 灯 |
+|---|---|---|---|
+| `HIT`、`JUMPED` | 防守方 | `CUE_HIT`，`count` = 力道档 + 1 | 红灯闪 1–3 下 |
+| `FEINT_PUNISHED` | 防守方 | `CUE_HIT`，`count` = 3 | 红灯闪 3 下 |
+| `GRAZE`、`BLOCKED` | 防守方 | `CUE_HALF` | 黄灯闪 1 下 |
+| `MISS` | 防守方 | `CUE_DODGE` | 蓝灯闪 1 下 |
+| `COUNTERED` | 防守方 / 攻击方 | `CUE_DODGE` / `CUE_COUNTER` | 蓝灯 1 下 / 红灯快闪 3 下 |
+| `FEINT_FOOLED`、`TIMEOUT` | — | 不发 | — |
+
+单角色板（`SLAP-ATK` / `SLAP-DEF`）按槽位收：槽位 0 永远是攻击装备。
+在这个功能之前烧录的板子没有 Cue characteristic，裁判会跳过它，不影响比赛。
+
 ## Raw 封包（14 bytes，实验 3）
 
 `uint16 seq` + `int16 a[3]`（mg）+ `int16 g[3]`（0.1 dps），每个样本一包。
@@ -49,6 +72,7 @@ TRIG,<t_local_ms>[,<tag>]                越过阈值
 EVT,<t_local>,<t_ref>,<cls>,<conf>,<peak>,<infer_us>[,<tag>]   已送出的事件
 REJ,<t_local>,<cls>,<conf>,<infer_us>[,<tag>]    推论为 background 或信心度不足，未送出
 SYNC,<offset>,<median_offset>
+CUE,<kind>,<count>                       收到裁判的回合反馈
 ```
 
 `<tag>` 只有玩家板会印（`atk` / `def`，哪条管线），放在最后一栏，旧的解析器照样能读。

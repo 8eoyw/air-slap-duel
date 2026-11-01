@@ -322,6 +322,37 @@ static void test_feint_rules() {
   CHECK(rec.results[3].delta_ms == 300);
 }
 
+static void test_cues() {
+  std::puts("cues");
+  RoundResult r = {};
+  r.attacker = 0;
+  r.outcome = OUT_HIT;
+  r.strength = STR_HEAVY;
+  SlapCue c = RefereeCore::cueFor(r, 1);
+  CHECK(c.kind == CUE_HIT && c.count == 3);
+  CHECK(RefereeCore::cueFor(r, 0).kind == CUE_NONE);  // the attacker feels nothing on a hit
+
+  r.strength = STR_LIGHT;
+  CHECK(RefereeCore::cueFor(r, 1).count == 1);
+
+  r.outcome = OUT_BLOCKED;
+  CHECK(RefereeCore::cueFor(r, 1).kind == CUE_HALF);
+
+  r.outcome = OUT_COUNTERED;
+  CHECK(RefereeCore::cueFor(r, 0).kind == CUE_COUNTER);
+  CHECK(RefereeCore::cueFor(r, 1).kind == CUE_DODGE);
+
+  r.outcome = OUT_TIMEOUT;
+  CHECK(RefereeCore::cueFor(r, 0).kind == CUE_NONE && RefereeCore::cueFor(r, 1).kind == CUE_NONE);
+
+  // Role boards: slot 0 is always the attacker's device, whoever attacks.
+  r.outcome = OUT_HIT;
+  r.attacker = 1;
+  CHECK(RefereeCore::cueForSlot(r, 1, false).kind == CUE_HIT);  // defender = player 0, on the DEF board
+  CHECK(RefereeCore::cueForSlot(r, 0, true).kind == CUE_HIT);   // player boards: slot = player
+  CHECK(RefereeCore::cueForSlot(r, 1, true).kind == CUE_NONE);
+}
+
 int main() {
   test_judge_table();
   test_strength();
@@ -330,6 +361,7 @@ int main() {
   test_feint_penalty_lasts_one_round();
   test_counter();
   test_feint_rules();
+  test_cues();
   if (failures) {
     std::printf("%d check(s) failed\n", failures);
     return 1;

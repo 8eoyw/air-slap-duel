@@ -1,5 +1,5 @@
 // NimBLE central: keeps connections to SLAP-ATK/SLAP-P1 and SLAP-DEF/SLAP-P2, subscribes to
-// their event characteristic and writes clock-sync beacons.
+// their event characteristic, writes clock-sync beacons and round cues.
 #include "sdkconfig.h"
 #if CONFIG_SLAP_MODE_BLE
 
@@ -23,6 +23,7 @@ struct Peer {
   uint16_t conn = BLE_HS_CONN_HANDLE_NONE;
   uint16_t svc_start = 0, svc_end = 0;
   uint16_t event_val = 0, sync_val = 0, event_cccd = 0;
+  uint16_t cue_val = 0;  // 0 on boards flashed before cues existed
   bool ready = false;
 };
 Peer g_peers[2] = {{SLAP_NAME_ATTACKER, SLAP_NAME_P1}, {SLAP_NAME_DEFENDER, SLAP_NAME_P2}};
@@ -31,7 +32,7 @@ bool g_pending_player[2];  // which name matched while connecting
 uint8_t g_own_addr_type;
 bool g_connecting = false;
 
-ble_uuid_any_t g_svc_uuid, g_event_uuid, g_sync_uuid;
+ble_uuid_any_t g_svc_uuid, g_event_uuid, g_sync_uuid, g_cue_uuid;
 const ble_uuid16_t kCccdUuid = BLE_UUID16_INIT(BLE_GATT_DSC_CLT_CFG_UUID16);
 
 void start_scan();
@@ -64,7 +65,8 @@ int on_subscribed(uint16_t conn, const struct ble_gatt_error* err, struct ble_ga
   if (i < 0) return 0;
   if (err->status != 0) { drop(conn, "subscribe failed"); return 0; }
   g_peers[i].ready = true;
-  ESP_LOGI(TAG, "%s ready (event=%d sync=%d)", shown(g_peers[i]), g_peers[i].event_val, g_peers[i].sync_val);
+  ESP_LOGI(TAG, "%s ready (event=%d sync=%d cue=%d)", shown(g_peers[i]), g_peers[i].event_val,
+           g_peers[i].sync_val, g_peers[i].cue_val);
   post_peer(i, true);
   start_scan();  // look for the other one
   return 0;
@@ -97,6 +99,7 @@ int on_chr(uint16_t conn, const struct ble_gatt_error* err, const struct ble_gat
   if (err->status == 0 && chr) {
     if (ble_uuid_cmp(&chr->uuid.u, &g_event_uuid.u) == 0) p.event_val = chr->val_handle;
     if (ble_uuid_cmp(&chr->uuid.u, &g_sync_uuid.u) == 0) p.sync_val = chr->val_handle;
+    if (ble_uuid_cmp(&chr->uuid.u, &g_cue_uuid.u) == 0) p.cue_val = chr->val_handle;
     return 0;
   }
   if (err->status == BLE_HS_EDONE) {
@@ -256,6 +259,7 @@ void slap_ble_start() {
   ble_uuid_from_str(&g_svc_uuid, SLAP_SERVICE_UUID);
   ble_uuid_from_str(&g_event_uuid, SLAP_EVENT_UUID);
   ble_uuid_from_str(&g_sync_uuid, SLAP_SYNC_UUID);
+  ble_uuid_from_str(&g_cue_uuid, SLAP_CUE_UUID);
   if (nimble_port_init() != ESP_OK) {
     ESP_LOGE(TAG, "nimble_port_init failed");
     return;
@@ -269,6 +273,11 @@ void slap_ble_send_sync(uint32_t referee_ms) {
   SlapSync s = {referee_ms};
   for (Peer& p : g_peers)
     if (p.ready) ble_gattc_write_no_rsp_flat(p.conn, p.sync_val, &s, sizeof(s));
+}
+
+void slap_ble_send_cue(uint8_t slot, const SlapCue& cue) {
+  Peer& p = g_peers[slot & 1];
+  if (p.ready && p.cue_val) ble_gattc_write_no_rsp_flat(p.conn, p.cue_val, &cue, sizeof(cue));
 }
 
 #endif  // CONFIG_SLAP_MODE_BLE
