@@ -20,3 +20,4 @@ dependencies.lock
 firmware/nano_player/*_model.h
 firmware/nano_attacker/model.h
 firmware/nano_defender/model.h
+dist/

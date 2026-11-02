@@ -34,7 +34,8 @@ BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
 PAGE = BUNDLE / "tools" / "web" / "index.html"
 CHARS = BUNDLE / "tools" / "web" / "chars"   # generated character poses, see tools/gen_chars.py
 FONTS = BUNDLE / "tools" / "web" / "fonts"   # subset to the page's glyphs by tools/fetch_fonts.py, so the demo runs offline
-STATIC_TYPES = {".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".css": "text/css"}
+INTRO = BUNDLE / "tools" / "web" / "intro"   # the story: script, stills and narration, see tools/gen_intro.py
+STATIC_TYPES = {".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".css": "text/css", ".mp3": "audio/mpeg"}
 SIM_EXE = BUNDLE / "build" / ("sim_match.exe" if sys.platform == "win32" else "sim_match")
 # Same simulator built with a short BLE_GRACE_MS: key presses have no sensor latency to wait for.
 KEYS_EXE = BUNDLE / "build" / ("sim_keys.exe" if sys.platform == "win32" else "sim_keys")
@@ -231,8 +232,8 @@ def make_handler(hub, source):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
-            elif self.path.startswith(("/chars/", "/fonts/")):
-                base = CHARS if self.path.startswith("/chars/") else FONTS
+            elif self.path.startswith(("/chars/", "/fonts/", "/intro/")):
+                base = {"chars": CHARS, "fonts": FONTS, "intro": INTRO}[self.path.split("/", 2)[1]]
                 f = (base / self.path.split("/", 2)[2].split("?")[0]).resolve()
                 kind = STATIC_TYPES.get(f.suffix)
                 if base.resolve() not in f.parents or not f.is_file() or not kind:

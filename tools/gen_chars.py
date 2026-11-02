@@ -46,9 +46,6 @@ CHARS = {
                "living orange-yellow ceramic tea mug with a C-shaped handle on one side, dark green tea leaves visible at the "
                "open top, a face on the front of the mug, soft cream belly area, grey-brown four-finger hands, short legs with "
                "dark paws; exactly two arms and two legs"),
-    "naigou": (["naigou.png", "naigou_laugh.png"],
-               "soft pale-yellow chubby puppy with floppy brown-tipped ears, dark muzzle and a short curled tail, wide toothy "
-               "grin when happy, dark paws; it stands upright on its hind legs like a person and uses its front paws as hands"),
     "dounai": (["dounai.png"],
                "small stylised 3D doll character with a golden-tan rounded body, big glossy brown eyes, smooth brown hair parted "
                "at the middle, cream belly patch, short stubby limbs, like a soft vinyl toy; exactly two arms and two legs"),
@@ -56,14 +53,6 @@ CHARS = {
                "large golden-yellow egg-shaped creature, smooth body with no neck, two small round eyes with a green ring and "
                "black pupil set wide apart, small thin smile, a folded white towel resting on top of its head; thin short golden "
                "arms with small hands and two short legs (add them even though the references hide them)"),
-    "naifen": (["naifen.png", "naifen2.png"],
-               "tall pink pear-shaped soft 3D creature, seamless neckless head and torso, small bulging eyes with a green ring "
-               "and black pupil on the sides of the head, thin wide mouth, pale cream belly patch, long thin pink arms ending in "
-               "small olive-grey hands, long thin pink legs with long flat feet; exactly two arms and two legs"),
-    "naishu": (["naishu.png", "naishu2.png"],
-               "round golden-yellow mouse with two huge round ears with pale orange inner ears, two big bulging round eyes with a "
-               "grey-green ring and black pupil, a long thin curled tail, small hands and feet; it stands upright on its hind "
-               "legs like a person"),
 }
 
 # in generation order: the ones the match cannot do without come first
@@ -154,6 +143,26 @@ def key(path):
     return im.crop(Image.fromarray(((al > .03) * 255).astype("uint8")).getbbox())
 
 
+def publish(c, p):
+    raw = WORK / "raw" / f"{c}_{p}.jpg"
+    top = np.asarray(Image.open(raw).convert("RGB"))[:12].reshape(-1, 3).mean(0)
+    if min(top[0], top[2]) - top[1] < 80:      # R and B well above G; a dark image has low G too
+        raw.unlink()
+        return "not on magenta, regenerate it"
+    im = key(raw)
+    if im.height > KEY_HEIGHT:
+        im = im.resize((round(im.width * KEY_HEIGHT / im.height), KEY_HEIGHT), Image.LANCZOS)
+    (OUT / c).mkdir(parents=True, exist_ok=True)
+    im.save(OUT / c / f"{p}.webp", quality=93, method=6)
+    return im.size
+
+
+def manifest():
+    # The page reads which poses exist, so a new pose shows up without touching index.html.
+    made = {c: {f.stem: Image.open(f).size for f in sorted((OUT / c).glob("*.webp"))} for c in CHARS if (OUT / c).is_dir()}
+    (OUT / "manifest.json").write_text(json.dumps(made), encoding="utf8")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["gen", "key"])
@@ -172,21 +181,9 @@ def main():
     for c in a.only:
         for p in a.poses:
             raw = WORK / "raw" / f"{c}_{p}.jpg"
-            if not raw.exists():
-                continue
-            if np.asarray(Image.open(raw).convert("RGB"))[:12].reshape(-1, 3).mean(0)[1] > 120:
-                print(c, p, "not on magenta, regenerate it", flush=True)
-                raw.unlink()
-                continue
-            im = key(raw)
-            if im.height > KEY_HEIGHT:
-                im = im.resize((round(im.width * KEY_HEIGHT / im.height), KEY_HEIGHT), Image.LANCZOS)
-            (OUT / c).mkdir(parents=True, exist_ok=True)
-            im.save(OUT / c / f"{p}.webp", quality=93, method=6)
-            print(c, p, im.size, flush=True)
-    # The page reads which poses exist, so a new pose shows up without touching index.html.
-    made = {c: {f.stem: Image.open(f).size for f in sorted((OUT / c).glob("*.webp"))} for c in CHARS if (OUT / c).is_dir()}
-    (OUT / "manifest.json").write_text(json.dumps(made), encoding="utf8")
+            if raw.exists():
+                print(c, p, publish(c, p), flush=True)
+    manifest()
 
 
 if __name__ == "__main__":

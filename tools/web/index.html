@@ -14,6 +14,9 @@
     b 拳赛海报  paper #efe6d2, vermilion #e4412a, ink #1f2a5a · ZCOOL QingKe + Anton · halftone discs, misregistered print
     c 玩具展台  backdrop colour = what just happened (cobalt, tomato, emerald, cream) · Noto Sans SC + Archivo · type behind the toys
 
+  The story around the match (menu, film, face-off, speech) is a layer on top: intro/story.json holds every word, and
+  each story match is an ordinary match, so the referee and its rules know nothing about it.
+
   Characters are key poses from tools/gen_chars.py. Motion is pose-to-pose: a pose swap plus a fast move and a held
   frame on contact, like a fighting game, rather than video. chars/manifest.json says which poses exist; a missing
   pose falls back along FALLBACK, so new art only needs a reload.
@@ -65,7 +68,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .dmg { position: absolute; z-index: 9; pointer-events: none; transform: translate(-50%, -50%); white-space: nowrap; }
 .burst { position: absolute; z-index: 8; width: 420px; height: 420px; margin: -210px 0 0 -210px; pointer-events: none; opacity: 0;
   clip-path: polygon(50% 0, 58% 34%, 86% 12%, 68% 42%, 100% 50%, 68% 58%, 86% 88%, 58% 66%, 50% 100%, 42% 66%, 14% 88%, 32% 58%, 0 50%, 32% 42%, 14% 12%, 42% 34%); }
-#flash { position: absolute; inset: 0; z-index: 20; opacity: 0; pointer-events: none; background: var(--flash, #fff); }
+#flash { position: absolute; inset: 0; z-index: 70; opacity: 0; pointer-events: none; background: var(--flash, #fff); }
 
 /* roster, under each fighter while nobody is playing */
 .pick { position: absolute; z-index: 12; display: flex; gap: 10px; transform: translateX(-50%); }
@@ -226,6 +229,61 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 [data-theme=c] .burst { background: #fff; }
 [data-theme=c] .pick { bottom: 86px; }
 
+/* ---------- the story: one look whatever the match direction is ---------- */
+.layer { position: absolute; inset: 0; z-index: 60; overflow: hidden; background: #000; color: #f3ead9; font-family: "Noto Serif SC", "Songti SC", SimSun, serif; }
+#film .shot { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .7s; }
+#film .shot.on { opacity: 1; }
+#film .shot.cut { transition: none; }
+#film::before, #film::after { content: ""; position: absolute; z-index: 2; left: 0; right: 0; height: 84px; background: #000; }
+#film::before { top: 0; }
+#film::after { bottom: 0; }
+#cap { position: absolute; z-index: 3; left: 150px; right: 150px; bottom: 116px; text-align: center; font-size: 46px; font-weight: 500; line-height: 1.4; letter-spacing: .05em; text-shadow: 0 2px 4px #000, 0 0 26px #000, 0 0 60px #000; }
+#scrollText { position: absolute; z-index: 1; writing-mode: vertical-rl; font-weight: 900; font-size: 110px; letter-spacing: .16em; color: #2a1c10; opacity: 0; transition: opacity .6s .3s; }
+#scrollText.on { opacity: .92; }
+#card { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; text-align: center; background: #000; opacity: 0; pointer-events: none; transition: opacity .5s; }
+#card.on { opacity: 1; }
+#card span { font-size: 36px; letter-spacing: .5em; padding-left: .5em; color: #b9ae9c; }
+#card b { display: block; margin-top: 18px; font-size: 130px; font-weight: 900; letter-spacing: .12em; padding-left: .12em; }
+.hintline { position: absolute; z-index: 5; right: 56px; bottom: 26px; font-size: 24px; color: #b9ae9c; }
+
+#menu > img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .62; animation: drift 26s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: scale(1.07); } }
+#menu::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, .95) 36%, rgba(0, 0, 0, .6) 56%, transparent 82%); }
+#menu .col { position: absolute; left: 110px; top: 150px; width: 900px; }
+#menu h1 { margin: 0; font-size: 158px; font-weight: 900; letter-spacing: .06em; line-height: 1.1; }
+#menu .en { font: italic 500 50px "Cormorant Garamond", serif; color: #d9ceb9; }
+#menu ul { list-style: none; margin: 70px 0 0; padding: 0; }
+#menu li { position: relative; padding: 12px 0 12px 56px; cursor: pointer; opacity: .55; transition: opacity .15s; }
+#menu li b { font-size: 58px; font-weight: 900; letter-spacing: .1em; }
+#menu li span { margin-left: 26px; font-size: 28px; color: #d9ceb9; }
+#menu li.on { opacity: 1; }
+#menu li.on::before { content: ""; position: absolute; left: 0; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; background: #f6c933; }
+
+#cast { display: grid; grid-template-columns: repeat(4, 1fr); gap: 34px; padding: 96px 70px 90px; background: #14110e; }
+#cast section { display: flex; flex-direction: column; min-width: 0; }
+#cast .pic { height: 430px; display: grid; place-items: end center; }
+#cast img { max-width: 100%; max-height: 430px; }
+#cast h2 { margin: 26px 0 0; font-size: 60px; font-weight: 900; letter-spacing: .08em; }
+#cast h3 { margin: 2px 0 16px; font-size: 30px; font-weight: 500; color: #f6c933; }
+#cast p { margin: 0; font-size: 30px; line-height: 1.55; color: #d9ceb9; }
+#cast .rec { margin-top: auto; padding-top: 18px; font-size: 28px; color: #b9ae9c; border-top: 2px solid #3a342c; }
+
+#vs > .bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .3; }
+#vs .pl { position: absolute; bottom: 150px; width: 700px; text-align: center; }
+#vs .pl.p0 { left: 110px; }
+#vs .pl.p1 { right: 110px; }
+#vs .pl img { max-height: 540px; max-width: 640px; }
+#vs .pl.p1 img { transform: scaleX(-1); }
+#vs .pl b { display: block; margin-top: 18px; font-size: 76px; font-weight: 900; letter-spacing: .1em; }
+#vs .pl span { font-size: 32px; color: #f6c933; }
+#vs .mark { position: absolute; left: 0; right: 0; top: 230px; text-align: center; font: italic 500 170px "Cormorant Garamond", serif; color: #f6c933; }
+#vs .line { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center; font-size: 46px; font-weight: 500; }
+#vs .line em { font-style: normal; color: #f6c933; margin-right: .6em; }
+
+.bubble { position: absolute; z-index: 9; max-width: 460px; padding: 14px 26px; border-radius: 22px; background: #fffdf6; color: #161412; font: 900 36px/1.3 "Noto Sans SC", var(--ui); white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -16px; margin-left: -12px; border: 12px solid transparent; border-top-color: #fffdf6; border-bottom: 0; border-top-width: 18px; }
+#stage.story .pick { display: none; }
+
 @media (prefers-reduced-motion: reduce) { .fighter .body { animation: none; } }
 </style>
 </head>
@@ -258,6 +316,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       <button data-cmd="start">开局<kbd>空格</kbd></button><button data-cmd="reset">重置<kbd>R</kbd></button><button id="themebtn">风格<kbd>T</kbd></button><button id="mute">音效<kbd>M</kbd></button><button id="fs">全屏<kbd>F</kbd></button>
     </div>
   </div>
+  <div id="menu" class="layer hidden"><img src="/intro/arena.webp" alt="" draggable="false"><div class="col"><h1>绷不住大赛</h1><div class="en">An Air Slap Duel</div><ul id="menuList"></ul></div><div class="hintline">↑ ↓ 选择 · 空格确定</div></div>
+  <div id="cast" class="layer hidden"></div>
+  <div id="vs" class="layer hidden"><img class="bg" src="/intro/arena.webp" alt="" draggable="false"><div class="mark">vs</div><div class="pl p0"><img id="vsImg0" alt=""><b id="vsName0"></b><span id="vsTitle0"></span></div><div class="pl p1"><img id="vsImg1" alt=""><b id="vsName1"></b><span id="vsTitle1"></span></div><div class="line" id="vsLine"></div></div>
+  <div id="film" class="layer hidden"><img class="shot" id="shot0" alt=""><img class="shot" id="shot1" alt=""><div id="scrollText"></div><div id="cap"></div><div id="card"><span id="cardKick"></span><b id="cardTitle"></b></div><div class="hintline">空格下一句 · 退格跳过</div></div>
   <div id="flash"></div>
   <div id="toast"></div>
   <div id="offline" class="hidden">和 web_dashboard.py 的连接断了，正在重连…</div>
@@ -274,11 +336,8 @@ const stage = $("stage");
 const CHARS = [
   { id: "naiwa",  name: "奶蛙", size: 1 },
   { id: "naicha", name: "奶茶", size: .8 },
-  { id: "naigou", name: "奶狗", size: .82 },
   { id: "dounai", name: "豆奶", size: .9 },
   { id: "naidan", name: "奶蛋", size: .92 },
-  { id: "naifen", name: "奶粉", size: 1.1 },
-  { id: "naishu", name: "奶鼠", size: .82 },
 ];
 // Share of the character height per pose: the cutouts are cropped to their outline.
 const POSE_SIZE = { idle: 1, windup: .98, slap: .84, hit: .9, block: .8, dodge: .88, dizzy: .96, laugh: .96, laugh2: .82, win: 1.04 };
@@ -305,7 +364,7 @@ const KEYMAP = {
   KeyA: [0, "forehand"], KeyD: [0, "backhand"], KeyW: [0, "feint"], KeyQ: [0, "dodge_left"], KeyE: [0, "dodge_right"], KeyS: [0, "block"],
   KeyJ: [1, "forehand"], KeyL: [1, "backhand"], KeyI: [1, "feint"], KeyU: [1, "dodge_left"], KeyO: [1, "dodge_right"], KeyK: [1, "block"],
 };
-const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false, mode: "referee", startedAt: 0, winner: null };
+const S = { hp: [100, 100], round: 0, attacker: 0, state: "IDLE", deadline: 0, judging: false, over: false, mode: "referee", startedAt: 0, winner: null, low: [false, false] };
 
 /* ---------------- theme + stage ---------------- */
 const THEMES = { a: "午夜决斗", b: "拳赛海报", c: "玩具展台" };
@@ -392,6 +451,7 @@ function choose(i, id) {
   Sfx.boing();
 }
 function cycle(i) {
+  if (Story.on) return;
   const ids = roster().map(c => c.id).filter(id => id !== PICK[i ^ 1]);
   if (ids.length) choose(i, ids[(ids.indexOf(PICK[i]) + 1) % ids.length]);
 }
@@ -448,6 +508,16 @@ const Sfx = {
     if (!this.ok()) return;
     const c = this.ctx, t = c.currentTime + when, o = c.createOscillator();
     o.type = "triangle"; o.frequency.value = fr; o.connect(this.gain(t, vol, 0.5)); o.start(t); o.stop(t + 0.55);
+  },
+  tick() { this.ding(1760, 0, 0.1); },
+  pad(on) {   // the film's only music: a low held chord
+    if (!on) { if (this.padNode) { const n = this.padNode; this.padNode = null; n.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.2); } return; }
+    if (this.padNode || !this.ok()) return;
+    const c = this.ctx, g = c.createGain(), f = c.createBiquadFilter();
+    f.type = "lowpass"; f.frequency.value = 420; g.gain.setValueAtTime(0, c.currentTime); g.gain.linearRampToValueAtTime(0.09, c.currentTime + 2);
+    f.connect(g); g.connect(c.destination);
+    for (const fr of [55, 82.4, 110.6]) { const o = c.createOscillator(); o.type = "triangle"; o.frequency.value = fr; o.connect(f); o.start(); o.stop(c.currentTime + 600); }
+    this.padNode = g;
   },
   laugh(len = 2.2) {   // "哈哈哈" — breathy bursts riding a falling pitch
     if (!this.ok()) return;
@@ -565,6 +635,7 @@ function onResult(m, animate) {
   const atk = m.attacker, def = atk ^ 1, k = STRENGTH[m.strength] || 0.8;
   const o = OUTCOME[m.outcome] || { zh: m.outcome, en: "", beat: "dull" };
   if (!animate) { setHp(m.hp, false); return; }
+  banter(m);
   const delta = m.delta_ms ? `反应 ${m.delta_ms} ms` : "";
   const land = (t, target, kk, crit, dmg) => setTimeout(() => {
     impact(target, kk, crit); setHp(m.hp); popDamage(target, dmg); beat(o.beat, 1300);
@@ -614,22 +685,31 @@ function onGameOver(m, animate) {
   const show = () => {
     beat("over"); stage.dataset.loser = loser;
     laugh(loser); clearTimeout($("f" + m.winner).poseH); setPose(m.winner, "win");
-    call("绷不住了", "Composure, lost.", "", 0);
-    $("sensor").textContent = secs != null ? `${nm(m.winner)}在绷不住大赛中坚持了 ${secs} 秒 · 按空格再来一局` : `${nm(m.winner)}绷住了，${nm(loser)}没绷住`;
-    if (animate) { flash(); shake(1.1); Sfx.laugh(2.6); }
+    call("绷不住了", "Composure, lost.", Story.on ? (Story.wins.length === STORY.chapters.length - 1 ? `${nm(m.winner)}赢了决赛` : `${nm(m.winner)}晋级`) : `布丁归${nm(m.winner)}`, 0);
+    $("sensor").textContent = Story.on ? `${nm(m.winner)}赢了 · 按空格继续`
+      : secs != null ? `${nm(m.winner)}在绷不住大赛中坚持了 ${secs} 秒 · 按空格再来一局` : `${nm(m.winner)}绷住了，${nm(loser)}没绷住`;
+    if (animate) {
+      flash(); shake(1.1); Sfx.laugh(2.6);
+      speak(m.winner, "win", 900); speak(loser, "lose", 2300);
+      tally(PICK[m.winner], "wins");
+    }
     setRoles(); syncPlaying();
+    if (Story.on) Story.ready = m.winner;
   };
   if (animate) setTimeout(show, 1000); else show();
 }
 
 function resetBoard() {
-  S.over = false; S.round = 0; S.deadline = 0; S.winner = null;
+  S.over = false; S.round = 0; S.deadline = 0; S.winner = null; S.low = [false, false];
   $("call").innerHTML = ""; clearTimeout(call.h);
   delete stage.dataset.loser;
   for (const i of [0, 1]) { stopLaugh(i); setPose(i, "idle"); }
   setHp([100, 100], false); beat("ready");
 }
-function idleLine() { $("sensor").textContent = "按空格开局 · 1 / 2 换角色 · T 换风格" + (S.mode === "keys" ? " · 两人一台键盘" : ""); }
+function idleLine() {
+  $("sensor").textContent = Story.on ? `第 ${Story.wins.length + 1} 场，共 ${STORY.chapters.length} 场 · 按空格开局 · 退格离开`
+    : "按空格开局 · 1 / 2 换角色 · T 换风格 · 退格回菜单" + (S.mode === "keys" ? " · 两人一台键盘" : "");
+}
 function syncPlaying() {
   const waiting = S.state === "IDLE" && !S.over;
   stage.classList.toggle("waiting", waiting);
@@ -647,6 +727,7 @@ function handle(m, animate = true) {
     }
     case "state":
       S.state = m.state;
+      if (animate && m.state !== "IDLE") dismiss();     // the boards can start a match on their own
       if (m.state === "IDLE") { resetBoard(); idleLine(); }
       if (m.state === "ARMED" && !S.deadline) S.deadline = performance.now() + ATTACK_TIMEOUT_MS;
       S.judging = m.state === "JUDGING";
@@ -671,6 +752,8 @@ function handle(m, animate = true) {
     case "snapshot":
       setMode(m.mode || "referee");
       for (const x of m.items) handle(x, false);
+      if (S.state === "GAME_OVER" && Menu.on) send("reset", true);     // a finished match is no reason to skip the menu
+      else if (S.state !== "IDLE") dismiss();
       break;
   }
 }
@@ -721,6 +804,244 @@ function keyAction(e) {
   return true;
 }
 
+/* ---------------- the story ---------------- */
+let STORY = null;                               // intro/story.json
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const lines = (id, ev) => STORY ? STORY.chars[id].lines[ev] : null;
+
+// In-match speech. Purely a reaction to what the referee already decided.
+function speak(i, ev, after = 0) {
+  const l = lines(PICK[i], ev);
+  if (!l) return;
+  setTimeout(() => {
+    const f = $("say" + i); if (f) f.remove();
+    const d = document.createElement("div");
+    d.className = "bubble"; d.id = "say" + i; d.textContent = pick(l);
+    d.style.left = Math.min(1640, Math.max(280, fighterX(i))) + "px";
+    d.style.top = Math.max(190, 1080 - cssPx("--floor") - cssPx("--h") * who(i).size - 110) + "px";
+    stage.appendChild(d);
+    d.animate([{ scale: .7, opacity: 0 }, { scale: 1, opacity: 1 }], { duration: 150, easing: "cubic-bezier(.2,1.4,.4,1)" });
+    setTimeout(() => d.remove(), 1900);
+  }, after);
+}
+const BANTER = { HIT: ["atk land", "def hit"], JUMPED: ["def hit"], GRAZE: ["def hit"], FEINT_PUNISHED: ["atk land"], BLOCKED: ["def block"],
+                 MISS: ["def dodge"], COUNTERED: ["def land"], FEINT_FOOLED: ["def feint"], FEINT_HELD: ["def feint"] };
+function banter(m) {
+  const close = [0, 1].find(i => m.hp[i] <= 30 && !S.low[i]);
+  if (close !== undefined) { S.low[close] = true; speak(close, "low", 1100); return; }
+  const opts = BANTER[m.outcome];
+  if (!opts || Math.random() < .25) return;
+  const [side, ev] = pick(opts).split(" ");
+  speak(side === "atk" ? m.attacker : m.attacker ^ 1, ev, 900);
+}
+function record() { try { return JSON.parse(localStorage.getItem("slap.tally")) || {}; } catch (e) { return {}; } }
+function tally(id, what) {
+  const t = record(); t[id] = t[id] || {}; t[id][what] = (t[id][what] || 0) + 1;
+  try { localStorage.setItem("slap.tally", JSON.stringify(t)); } catch (e) {}
+}
+
+const Film = {
+  on: false, run: 0, top: 0, img: "", next: () => {}, stop: () => {},
+  async play(name, card) {
+    const run = ++this.run, beats = STORY.scenes[name];
+    beats.forEach(b => { new Image().src = `/intro/${b.img}.webp`; });
+    this.on = true; this.img = ""; $("film").classList.remove("hidden"); $("cap").textContent = "";
+    Sfx.pad(true);
+    const halted = new Promise(r => { this.stop = r; });
+    let why = "";
+    if (card) why = await Promise.race([this.card(card), halted]);
+    for (let n = 0; n < beats.length && !why; n++) why = await Promise.race([this.beat(name, n, beats[n]), halted]);
+    if (run !== this.run) return false;
+    this.on = false; this.next();
+    $("film").classList.add("hidden"); $("scrollText").classList.remove("on");
+    return why !== "abort";
+  },
+  async card([kick, title]) {
+    $("cardKick").textContent = kick; $("cardTitle").textContent = title;
+    $("card").classList.add("on");
+    await Promise.race([wait(2400), new Promise(r => { this.next = r; })]);
+    $("card").classList.remove("on");
+    await wait(350);
+  },
+  show(b) {
+    const was = $("shot" + this.top), now = $("shot" + (this.top ^= 1));
+    now.classList.toggle("cut", !!b.cut); was.classList.toggle("cut", !!b.cut);
+    now.onerror = () => { now.classList.remove("on"); was.classList.add("on"); };   // a still that is not generated yet: hold the last one
+    now.src = `/intro/${b.img}.webp`; this.img = b.img;
+    now.classList.add("on"); was.classList.remove("on");
+    const K = { in: ["scale(1)", "scale(1.09)"], out: ["scale(1.09)", "scale(1)"], right: ["scale(1.1) translateX(-2.5%)", "scale(1.1) translateX(2.5%)"] }[b.move] || ["none", "none"];
+    now.getAnimations().forEach(a => a.id === "kb" && a.cancel());
+    now.animate(K.map(transform => ({ transform })), { duration: 11000, fill: "forwards", easing: "linear", id: "kb" });
+  },
+  fx(name) {
+    const F = { tick: () => Sfx.tick(), ding: () => Sfx.ding(330, 0, .2), whoosh: () => Sfx.whoosh(.4), boing: () => Sfx.boing(), laugh: () => Sfx.laugh(3),
+                slap: () => { Sfx.slap(1.15); shake(1.2); flash(); }, tick3: () => [0, 1, 2].forEach(n => setTimeout(() => Sfx.tick(), n * 1000 + 900)) };
+    if (F[name]) F[name]();
+  },
+  async beat(name, n, b) {
+    if (b.img !== this.img) this.show(b);
+    const sc = $("scrollText");
+    sc.textContent = b.scroll || ""; sc.classList.toggle("on", !!b.scroll);
+    if (b.scrollAt) { sc.style.left = b.scrollAt[0] + "px"; sc.style.top = b.scrollAt[1] + "px"; }
+    $("cap").textContent = b.say;
+    this.fx(b.fx);
+    const hold = b.hold ?? 450, clip = new Audio(`/intro/say/${name}_${n}.mp3`);
+    clip.muted = Sfx.muted;
+    let timer, fell = false;
+    await new Promise(done => {
+      this.next = done;
+      const reading = () => { if (!fell) { fell = true; timer = setTimeout(done, [...b.say].length * 210 + hold); } };
+      clip.onended = () => { if (!fell) { fell = true; timer = setTimeout(done, hold); } };
+      clip.onerror = reading;
+      clip.play().catch(reading);
+    });
+    clearTimeout(timer); clip.pause();
+  },
+};
+
+const Vs = {
+  on: false, end: () => {},
+  run() {
+    const order = CHARS.map(c => c.id).filter(id => PICK.includes(id)), talk = STORY.rivals[order.join("-")] || [];
+    PICK.forEach((id, i) => {
+      $("vsImg" + i).src = poseSrc({ id }, "idle");
+      $("vsName" + i).textContent = nm(i); $("vsTitle" + i).textContent = STORY.chars[id].title;
+    });
+    $("vsLine").textContent = "";
+    $("vs").classList.remove("hidden"); this.on = true;
+    Sfx.ding(220, 0, .22); Sfx.ding(330, .12, .18);
+    return new Promise(res => {
+      let n = 0, h;
+      this.end = () => { clearTimeout(h); this.on = false; this.end = () => {}; $("vs").classList.add("hidden"); res(); };
+      const step = () => {
+        if (n >= talk.length) { h = setTimeout(() => this.end(), 700); return; }
+        const [id, text] = talk[n++], c = CHARS.find(x => x.id === id);
+        $("vsLine").innerHTML = ""; const em = document.createElement("em"); em.textContent = c.name;
+        $("vsLine").append(em, text);
+        h = setTimeout(step, 1250);
+      };
+      h = setTimeout(step, 500);
+    });
+  },
+};
+
+const Story = {
+  on: false, wins: [], ready: null, done: () => {},
+  match() { return new Promise(r => { this.done = r; }); },
+  title(t) { document.querySelector("#title .zh").textContent = t; },
+  async play() {
+    this.on = true; this.wins = []; this.ready = null;
+    stage.classList.add("story"); Menu.close();
+    const nth = ["第一场", "第二场", "决赛"];
+    if (await Film.play("prologue")) await this.ladder(nth);
+    this.leave();
+  },
+  async ladder(nth) {
+    for (const [n, c] of STORY.chapters.entries()) {
+      if (c.scene && !await Film.play(c.scene, [nth[n], c.title])) return;
+      PICK = (c.pair || this.wins).slice();
+      buildFighter(0); buildFighter(1); this.title(c.title); idleLine();
+      const id = await this.match();
+      if (!id) return;
+      this.wins.push(id);
+      if (c.after && !await Film.play(c.after)) return;
+    }
+    const champ = this.wins[this.wins.length - 1];
+    tally(champ, "pudding");
+    if (await Film.play("win_" + champ)) await Film.play("epilogue");
+  },
+  // Space after a story match: back to IDLE first, so the film never plays over a finished board.
+  async next() {
+    const id = PICK[this.ready];
+    this.ready = null;
+    await toIdle();
+    this.done(id);
+  },
+  leave() {
+    if (!this.on) return;
+    this.on = false; this.ready = null; this.done(null);
+    stage.classList.remove("story"); this.title("绷不住大赛");
+    Sfx.pad(false);
+    PICK = loadPick(); buildFighter(0); buildFighter(1); idleLine();
+    if (S.state === "IDLE") Menu.open();
+  },
+};
+async function toIdle() {
+  send("reset", true);
+  for (let n = 0; n < 40 && S.state !== "IDLE"; n++) await wait(50);
+}
+async function beginMatch() {
+  if (STORY && S.state === "IDLE" && !S.over) await Vs.run();
+  send("start");
+}
+
+const MENU = [["story", "故事模式", "消失的布丁"], ["free", "自由对战", "挑两位，直接开打"], ["cast", "奶家人物", "档案与战绩"]];
+const Menu = {
+  on: false, at: 0,
+  draw() {
+    $("menuList").innerHTML = "";
+    MENU.forEach(([id, zh, sub], n) => {
+      const li = document.createElement("li");
+      li.className = n === this.at ? "on" : "";
+      li.innerHTML = `<b>${zh}</b><span>${sub}</span>`;
+      li.addEventListener("mouseenter", () => { this.at = n; this.draw(); });
+      li.addEventListener("click", () => this.go());
+      $("menuList").appendChild(li);
+    });
+  },
+  open() { this.on = true; this.draw(); $("menu").classList.remove("hidden"); Sfx.pad(false); },
+  close() { this.on = false; $("menu").classList.add("hidden"); },
+  go() {
+    Sfx.wake();
+    const id = MENU[this.at][0];
+    if (id === "story") Story.play();
+    else if (id === "free") { this.close(); idleLine(); }
+    else showCast();
+  },
+};
+function showCast() {
+  const t = record(), box = $("cast");
+  box.innerHTML = "";
+  for (const c of CHARS) {
+    const info = STORY.chars[c.id], r = t[c.id] || {}, s = document.createElement("section");
+    s.innerHTML = `<div class="pic"><img src="${poseSrc(c, "idle")}" alt="" draggable="false"></div><h2>${c.name}</h2><h3>${info.title}</h3><p>${info.bio}</p><div class="rec">赢过 ${r.wins || 0} 场 · 吃到 ${r.pudding || 0} 个布丁</div>`;
+    box.appendChild(s);
+  }
+  box.classList.remove("hidden");
+}
+const castOpen = () => !$("cast").classList.contains("hidden");
+function dismiss() {
+  if (Film.on) { Film.run++; Film.on = false; $("film").classList.add("hidden"); Film.next(); Film.stop("abort"); }
+  if (Vs.on) Vs.end();
+  if (Menu.on) Menu.close();
+  $("cast").classList.add("hidden");
+  Sfx.pad(false);
+}
+// What Space and Backspace mean depends on what is on screen; true when the key was used here.
+function storyKey(e) {
+  if (!STORY) return false;
+  const go = e.code === "Space" || e.code === "Enter", back = e.code === "Backspace" || e.code === "Escape";
+  if (Film.on) { if (go) Film.next(); if (back) Film.stop("skip"); return true; }
+  if (Vs.on) { if (go || back) Vs.end(); return true; }
+  if (castOpen()) { if (go || back) $("cast").classList.add("hidden"); return true; }
+  if (Menu.on) {
+    if (e.code === "ArrowUp" || e.code === "ArrowDown") { Menu.at = (Menu.at + (e.code === "ArrowUp" ? MENU.length - 1 : 1)) % MENU.length; Menu.draw(); }
+    if (go) Menu.go();
+    return true;
+  }
+  if (Story.on && Story.ready !== null) {
+    if (go) Story.next();
+    if (back) { Story.ready = null; toIdle().then(() => Story.done(null)); }
+    return go || back;
+  }
+  if (Story.on && S.state !== "IDLE") return go;      // Space must not start a new match in the middle of the story
+  if (back && S.over) { toIdle().then(() => Menu.open()); return true; }
+  if (back && S.state === "IDLE" && !S.over) { if (Story.on) Story.done(null); else Menu.open(); return true; }
+  if (go && S.state === "IDLE" && !S.over) { beginMatch(); return true; }
+  return false;
+}
+
 /* ---------------- commands ---------------- */
 async function send(cmd, quiet = false) {
   Sfx.wake();
@@ -737,6 +1058,9 @@ $("fs").addEventListener("click", toggleFs);
 $("themebtn").addEventListener("click", nextTheme);
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
+  Sfx.wake();
+  if (storyKey(e)) { e.preventDefault(); return; }
+  if (Film.on || Vs.on || Menu.on) return;
   if (keyAction(e)) { e.preventDefault(); return; }
   if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); send("start"); }
   else if (e.code === "Digit1" || e.code === "Digit2") cycle(e.code === "Digit1" ? 0 : 1);
@@ -762,9 +1086,11 @@ async function boot() {
   setTheme(THEMES[theme] ? theme : "c", true);
   fitStage(); buildLegend();
   MAN = await (await fetch("/chars/manifest.json")).json();
+  try { STORY = await (await fetch("/intro/story.json")).json(); } catch (e) {}
   PICK = loadPick();
   for (const i of [0, 1]) buildFighter(i);
   setHp([100, 100], false); idleLine(); syncPlaying();
+  if (STORY) Menu.open();
   requestAnimationFrame(tick);
   connect();
 }

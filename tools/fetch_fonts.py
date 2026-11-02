@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "tools" / "web" / "index.html"
+STORY = ROOT / "tools" / "web" / "intro" / "story.json"
 OUT = ROOT / "tools" / "web" / "fonts"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36"}
 ASCII = "".join(chr(c) for c in range(32, 127)) + "−·°"
@@ -36,7 +37,8 @@ def get(url):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    cjk = "".join(sorted(set(re.findall(r"[　-〿一-鿿＀-￯]", PAGE.read_text(encoding="utf8")))))
+    words = PAGE.read_text(encoding="utf8") + STORY.read_text(encoding="utf8")
+    cjk = "".join(sorted(set(re.findall(r"[　-〿一-鿿＀-￯]", words))))
     css = []
     for spec, stem, kind in FACES:
         text = ASCII + cjk if kind == "all" else ASCII

@@ -124,7 +124,9 @@ arduino-cli compile -b arduino:mbed_nano:nano33ble --library firmware/libraries/
 python tools/ble_monitor.py
 ```
 
-**比赛画面（demo 投影用）**：「绷不住大赛」——主角是网络迷因奶蛙和奶家人（奶茶、奶狗、豆奶、奶蛋、奶粉、奶鼠），开局前按 1 / 2 或点缩略图换角色。
+**比赛画面（demo 投影用）**：「绷不住大赛」——主角是网络迷因奶蛙和奶家人（奶茶、豆奶、奶蛋），开局前按 1 / 2 或点缩略图换角色。
+
+**故事模式「消失的布丁」**：开场短片之后是一场四人淘汰赛（两场半决赛 + 屋顶决赛），每场都是一局普通比赛，规则和裁判完全不变；决赛对阵由实际胜者决定，结局按冠军分四种。此外有赛前对峙、比赛中的角色吐槽、角色档案和战绩，全部是展示层。台词都在 `tools/web/intro/story.json`，改完跑 `tools/gen_intro.py tts` 重新配音、`tools/fetch_fonts.py` 重新生成字体子集。
 有三种美术风格，按 T 切换：午夜决斗（电影片头）、拳赛海报（双色印刷）、玩具展台（背景色跟着事件变）。画面是固定 1920×1080 的舞台，缩放到窗口，只针对桌面与投影。
 血量是「绷住值」，被打中会忍不住笑，归零的一方捧腹大笑停不下来；底部一行实时显示板子辨识到的事件。
 角色由 `tools/gen_chars.py` 带参考图生成关键姿势（来源见 `tools/web/chars/SOURCES.md`），动作是关键姿势加快速位移。字体已子集化到本地（`tools/fetch_fonts.py`，改文字后要重跑），音效现场合成，不需要联网。
@@ -140,7 +142,7 @@ make -C tests keys && python tools/web_dashboard.py --keys # 没有硬件：两�
 
 不带参数时自动判断：插着裁判板（CH340 / ESP32 USB / CP210x）就接它，没有就进键盘对打。
 打包成单一 exe（双击即用，Windows）：先用 `-static` 编 `build/sim_match.exe` 与 `build/sim_keys.exe`，再
-`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "tools/web/chars;tools/web/chars" --add-data "tools/web/fonts;tools/web/fonts" --add-data "build/sim_match.exe;build" --add-data "build/sim_keys.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
+`pyinstaller --onefile --name AirSlapDuel --add-data "tools/web/index.html;tools/web" --add-data "tools/web/chars;tools/web/chars" --add-data "tools/web/fonts;tools/web/fonts" --add-data "tools/web/intro;tools/web/intro" --add-data "build/sim_match.exe;build" --add-data "build/sim_keys.exe;build" --hidden-import serial.tools.list_ports tools/web_dashboard.py`
 
 还没有数据时，可以先用合成数据把整条 pipeline 跑一遍：
 `python tools/synth_data.py && cd ml && python train.py --task attacker --data ../data_synth`

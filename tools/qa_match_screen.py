@@ -1,11 +1,11 @@
-"""Play one match per theme against web_dashboard.py --keys --http-port 8777 and screenshot each beat.
+"""Play one match per theme against web_dashboard.py --keys --http-port 8779 and screenshot each beat.
 
     python tools/qa_match_screen.py <out_prefix> [theme ...] [--pick id,id]
 """
 import sys, time
 from playwright.sync_api import sync_playwright
 
-URL = "http://127.0.0.1:8777/"
+URL = "http://127.0.0.1:8779/"
 args = sys.argv[1:]
 pick = "naiwa,naicha"
 if "--pick" in args:
@@ -22,8 +22,10 @@ with sync_playwright() as p:
         pg.goto(URL)
         pg.evaluate(f"localStorage.setItem('slap.theme','{th}'); localStorage.setItem('slap.fighters', JSON.stringify({ids}))")
         pg.reload(); time.sleep(1)
+        pg.keyboard.press("ArrowDown"); pg.keyboard.press("Enter")     # 自由对战
         pg.keyboard.press("KeyR"); time.sleep(1); pg.screenshot(path=f"{out}_{th}_1idle.png")
-        pg.keyboard.press("Space"); shots = 0; t0 = time.time(); armed = False
+        pg.keyboard.press("Space"); time.sleep(.6); pg.screenshot(path=f"{out}_{th}_1vs.png"); pg.keyboard.press("Space")
+        shots = 0; t0 = time.time(); armed = False
         while time.time() - t0 < 80:
             st = pg.evaluate("[S.state, S.attacker, S.over, S.hp]")
             if st[2]: break

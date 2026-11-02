@@ -1,0 +1,123 @@
+{
+  "chars": {
+    "naiwa": {
+      "title": "从不眨眼的家伙",
+      "bio": "没有人见过奶蛙眨眼，包括奶蛙自己。它的表情只有一种，心情有很多种。",
+      "lines": {
+        "land": ["……嗯。", "风大。"],
+        "hit": ["没感觉。", "眼睛有点干。"],
+        "dodge": ["看见了。", "我一直看着呢。"],
+        "block": ["不疼。", "再来。"],
+        "feint": ["这招，我想想。", "我没动，是风动。"],
+        "low": ["嘴角，有点不听话。", "快撑不住了。"],
+        "win": ["……嗯。", "今天，还行。"],
+        "lose": ["哈哈哈哈哈——", "我，我没笑，哈哈哈——"]
+      }
+    },
+    "naicha": {
+      "title": "易怒的陶瓷",
+      "bio": "一生气，茶叶就竖起来。摔一下就碎，所以这辈子不打算认输。",
+      "lines": {
+        "land": ["这一下，是替茶叶打的！", "烫不烫！"],
+        "hit": ["我的把手！", "洒了洒了！"],
+        "dodge": ["陶瓷也很灵活的！", "差点裂了。"],
+        "block": ["杯壁够厚！", "这点力气，泡不开。"],
+        "feint": ["你骗我？！", "茶都凉了你还装！"],
+        "low": ["茶叶要竖起来了……", "我不笑，我冒泡而已。"],
+        "win": ["趁热喝！", "这局，配茶正好。"],
+        "lose": ["噗——哈哈哈，茶喷了！", "别看我，哈哈哈哈——"]
+      }
+    },
+    "dounai": {
+      "title": "全家最小的审判官",
+      "bio": "个子最小，账记得最清。谁欠它一口布丁，它能记到明年。",
+      "lines": {
+        "land": ["记下了。", "这一下，算利息。"],
+        "hit": ["这笔账，我记着。", "你完了。"],
+        "dodge": ["个子小，没办法。", "打不着吧。"],
+        "block": ["证据确凿。", "驳回。"],
+        "feint": ["此项不予采信。", "你在犯罪现场挥手？"],
+        "low": ["本庭，有点想笑。", "肃静，肃静……"],
+        "win": ["退庭。", "判决生效。"],
+        "lose": ["哈哈哈，本庭宣布，哈哈哈——", "这不算，哈哈哈哈——"]
+      }
+    },
+    "naidan": {
+      "title": "毛巾不离头",
+      "bio": "洗完澡从不摘毛巾。问它为什么，它说头凉。它说这句话的时候，不看你。",
+      "lines": {
+        "land": ["失礼了。", "我刚洗完澡。"],
+        "hit": ["别碰头！", "毛巾，毛巾还在吧？"],
+        "dodge": ["头不能晃。", "稳住，稳住。"],
+        "block": ["不要往上打！", "我头凉。"],
+        "feint": ["你看我头干嘛？", "什么都没有。"],
+        "low": ["头上好沉……", "忍住，这一抖就完了。"],
+        "win": ["我去洗个澡。", "承让，别看我头。"],
+        "lose": ["哈哈哈，别让我抖，哈哈哈——", "完了完了，哈哈哈——"]
+      }
+    }
+  },
+  "rivals": {
+    "naiwa-naicha": [["naicha", "是我先碰到盘子的。"], ["naiwa", "……"], ["naicha", "你倒是说话啊！"]],
+    "naiwa-dounai": [["dounai", "案发时你在哪里？"], ["naiwa", "在这。"], ["dounai", "看着我的眼睛。"], ["naiwa", "一直在看。"]],
+    "naiwa-naidan": [["naiwa", "你头上。"], ["naidan", "头凉。"], ["naiwa", "……"]],
+    "naicha-dounai": [["dounai", "你上次欠我半口。"], ["naicha", "那是三年前的事！"], ["dounai", "有记录。"]],
+    "naicha-naidan": [["naicha", "你怎么老不摘毛巾？"], ["naidan", "你怎么老不洗杯子？"], ["naicha", "你说什么？！"]],
+    "dounai-naidan": [["dounai", "毛巾摘下来。"], ["naidan", "头凉。"], ["dounai", "现在是夏天。"]]
+  },
+  "chapters": [
+    { "title": "谁先动的手", "scene": null, "pair": ["naiwa", "naicha"], "after": "gone" },
+    { "title": "毛巾之下", "scene": "hall", "pair": ["dounai", "naidan"], "after": null },
+    { "title": "屋顶决赛", "scene": "roof", "pair": null, "after": "reveal" }
+  ],
+  "scenes": {
+    "prologue": [
+      { "img": "table", "move": "in", "say": "奶家，周日晚上。" },
+      { "img": "table", "move": "in", "say": "全家四口，围坐一桌。没有人说话。" },
+      { "img": "pudding", "move": "in", "say": "因为冰箱里，只剩最后一个布丁。" },
+      { "img": "hands", "move": "in", "cut": true, "fx": "tick", "say": "两只手，同时伸了出去。" },
+      { "img": "rule", "scroll": "不准动手", "scrollAt": [1382, 280], "say": "奶蛋指了指墙。家规第一条：不准动手。" },
+      { "img": "stance", "move": "out", "say": "奶蛙把手收了回来。它没有动手。" },
+      { "img": "air", "move": "right", "cut": true, "fx": "whoosh", "say": "它只是隔着两米，对着空气，挥了一下。" },
+      { "img": "recoil", "cut": true, "fx": "slap", "say": "两米外，奶茶的脸，歪了。", "hold": 900 },
+      { "img": "silence", "move": "in", "fx": "tick3", "say": "全家沉默了三秒。", "hold": 2600 },
+      { "img": "laugh", "move": "in", "say": "奶蛋差点笑出来。这一下，大家都明白了。" },
+      { "img": "arena", "move": "out", "say": "不碰到对方，就不算动手。先笑出来的，算输。" },
+      { "img": "arena", "move": "in", "say": "布丁只有一个。绷不住大赛，现在开始。", "fx": "ding", "hold": 800 }
+    ],
+    "gone": [
+      { "img": "table", "move": "in", "say": "第一场打完，大家回头看了一眼桌子。" },
+      { "img": "empty", "move": "in", "cut": true, "fx": "ding", "say": "布丁，不见了。", "hold": 1200 },
+      { "img": "empty", "move": "in", "say": "从现在起，这不只是比赛。这是审问。" }
+    ],
+    "hall": [
+      { "img": "hall", "move": "in", "say": "半夜，走廊。豆奶举着手电，找到了刚洗完澡的奶蛋。" },
+      { "img": "hall", "move": "in", "say": "奶蛋说，它一直在洗澡。可是头上的毛巾，比平时高了一点。" }
+    ],
+    "roof": [
+      { "img": "roof", "move": "out", "say": "决赛搬到了屋顶。赢的人，有权搜查全家。" },
+      { "img": "roof", "move": "in", "say": "月亮很圆。没有人敢笑。" }
+    ],
+    "reveal": [
+      { "img": "empty", "move": "out", "say": "比赛结束，全家回到餐桌。布丁，还是没有找到。" },
+      { "img": "towel", "cut": true, "move": "in", "fx": "boing", "say": "奶蛋擦了擦汗。毛巾，滑了下来。", "hold": 1000 },
+      { "img": "towel", "move": "in", "say": "布丁在它头上，放了一整晚。", "hold": 800 },
+      { "img": "family", "cut": true, "move": "in", "fx": "laugh", "say": "这一次，全家都没绷住。", "hold": 1600 }
+    ],
+    "win_naiwa": [
+      { "img": "win_naiwa", "move": "in", "say": "布丁归奶蛙。它吃了一口，没有任何表情。这是它今年最开心的一天。" }
+    ],
+    "win_naicha": [
+      { "img": "win_naicha", "move": "in", "say": "布丁归奶茶。它吃了一口，说，配茶正好。" }
+    ],
+    "win_dounai": [
+      { "img": "win_dounai", "move": "in", "say": "布丁归豆奶。它吃完，把这件事记进了账本。" }
+    ],
+    "win_naidan": [
+      { "img": "win_naidan", "move": "in", "say": "布丁归奶蛋。它吃到了自己头上的布丁。法律上，这没有问题。" }
+    ],
+    "epilogue": [
+      { "img": "family", "move": "out", "say": "从此，奶家家规多了一句：不准动手，但可以挥手。", "hold": 1400 }
+    ]
+  }
+}
