@@ -30,6 +30,10 @@ class SlapFeedback : public RefereeOutput {
 void slap_referee_start(SlapFeedback* feedback);
 // Thread-safe; may be called from MCP tools, buttons, other tasks.
 void slap_referee_command(SlapCommand cmd);
+// Bench hook: inject a classified event as if a wearable had sent it. t_onset is
+// stamped with the referee clock, so the judging table runs exactly as in a match.
+// Useful when no player boards are available.
+void slap_referee_inject(uint8_t player, uint8_t cls, uint16_t peak);
 
 // Referee clock in ms (the clock the wearables are synced to in BLE mode).
 uint32_t slap_now_ms();

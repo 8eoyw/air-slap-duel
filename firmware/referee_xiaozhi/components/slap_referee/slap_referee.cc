@@ -61,6 +61,12 @@ void referee_task(void*) {
           else                            g_core->onDefenderEvent(m.event, now);
 #endif
           break;
+        case SlapMsg::INJECT:  // console test hook: no wearable involved
+          g_fb->onEvent(slot_name(m.peer), m.event, m.rx_ms);
+#if CONFIG_SLAP_MODE_BLE
+          g_core->onPlayerEvent(m.peer & 1, m.event, now);
+#endif
+          break;
         case SlapMsg::PEER:
           g_player_board[m.peer & 1] = m.player_board;
 #if CONFIG_SLAP_MODE_BLE
@@ -118,6 +124,18 @@ void slap_referee_command(SlapCommand cmd) {
   SlapMsg m = {};
   m.kind = SlapMsg::COMMAND;
   m.cmd = cmd;
+  slap_post(m);
+}
+
+void slap_referee_inject(uint8_t player, uint8_t cls, uint16_t peak) {
+  SlapMsg m = {};
+  m.kind = SlapMsg::INJECT;
+  m.peer = player & 1;
+  m.rx_ms = slap_now_ms();
+  m.event.t_onset = m.rx_ms;  // same clock the wearables are synced to
+  m.event.cls = cls;
+  m.event.conf = 255;
+  m.event.peak = peak;
   slap_post(m);
 }
 

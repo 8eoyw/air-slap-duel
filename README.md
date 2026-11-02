@@ -134,6 +134,8 @@ python tools/ble_monitor.py
 
 ```bash
 python tools/web_dashboard.py --port COM5     # 接小智裁判（standalone）或 nano_hub
+python tools/web_dashboard.py --port COM5 --play  # 键盘代替选手板，按键转成 ev 事件给裁判板
+python tools/pc_referee.py --solo --players SLAP-P1 --web   # 只有一块板：笔电当裁判，自动开网页
 make -C tests sim && python tools/web_dashboard.py --sim   # 没有硬件：模拟比赛，按空格开一场
 make -C tests keys && python tools/web_dashboard.py --keys # 没有硬件：两人用键盘对打，规则走同一份裁判核心
 ```

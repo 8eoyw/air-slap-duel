@@ -42,6 +42,35 @@ xiaozhi_glue/              接进 xiaozhi-esp32 的胶水（表情、文字、�
 
 也可以把 standalone 的 USB 接到笔电，用 `python tools/dashboard.py --port COMx` 看记分板。
 
+## 没有选手板时验证判定
+
+standalone 的控制台可以注入假事件（不经过 BLE）：
+
+```
+reset
+start
+announce_done        # 跳过 2.5 s 的宣布超时
+ev 0 forehand 900
+ev 1 dodge_right 300
+```
+
+`ev <0|1> <class> <peak_dps>`，类别同 `slapClassName`。`t_onset` 用裁判时钟打戳，
+判定表和真比赛完全一致。`start` 只在 IDLE / GAME_OVER 生效，所以先 `reset`。
+
+整轮自动回归（覆盖 MISS / HIT / BLOCKED / GRAZE / FEINT_PUNISHED）：
+
+```bash
+python tools/bench_referee.py --port COM9
+```
+
+想自己动手打，用网页的键盘模式，按键会转成 `ev` 命令发给裁判板：
+
+```bash
+python tools/web_dashboard.py --port COM9 --play
+```
+
+页面里按 `R` 重置、空格开局；攻方按 `A`/`D`/`W`，守方按 `Q`/`E`/`S`，Shift 重击、Alt 轻击。
+
 ## 接进 xiaozhi-esp32
 
 1. 把 `components/slap_referee` 和 `firmware/libraries/SlapCommon` 复制进小智的源码树，

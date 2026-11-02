@@ -4,7 +4,7 @@
 #include "slap_referee.h"
 
 struct SlapMsg {
-  enum Kind : uint8_t { EVENT, PEER, COMMAND } kind;
+  enum Kind : uint8_t { EVENT, PEER, COMMAND, INJECT } kind;
   uint8_t     peer;       // slot: 0 = SLAP-ATK / SLAP-P1, 1 = SLAP-DEF / SLAP-P2
   bool        connected;  // PEER
   bool        player_board;  // PEER: slot holds a player board (SLAP-P1/P2)

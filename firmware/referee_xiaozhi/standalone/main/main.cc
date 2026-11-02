@@ -3,6 +3,7 @@
 //   BOOT button (GPIO0) -> start / rematch
 //   console lines: start | announce_done | swap_done | reset | left1 | right1 | left2 | right2
 //                  status (re-print peers + state; tools/dashboard.py sends it when it opens)
+//                  ev <0|1> <class> <peak_dps>  (fake wearable event; no player boards needed)
 #include <stdio.h>
 #include <string.h>
 
@@ -86,6 +87,21 @@ void console_task(void*) {
     else if (!strcmp(line, "left2")) slap_referee_command(SLAP_CMD_LEFT_P2);
     else if (!strcmp(line, "right2")) slap_referee_command(SLAP_CMD_RIGHT_P2);
     else if (!strcmp(line, "status")) g_feedback.reprint();
+    else if (!strncmp(line, "ev ", 3)) {
+      int p = -1, peak = 0;
+      char name[16] = {};
+      if (sscanf(line, "ev %d %15s %d", &p, name, &peak) == 3 && (p == 0 || p == 1)) {
+        static const uint8_t kAll[] = {CLS_FOREHAND, CLS_BACKHAND, CLS_FEINT,
+                                       CLS_DODGE_LEFT, CLS_DODGE_RIGHT, CLS_BLOCK};
+        int cls = -1;
+        for (uint8_t c : kAll)
+          if (!strcmp(name, slapClassName(c))) { cls = c; break; }
+        if (cls >= 0) slap_referee_inject((uint8_t)p, (uint8_t)cls, (uint16_t)peak);
+        else printf("unknown class: %s\n", name);
+      } else {
+        printf("usage: ev <0|1> <forehand|backhand|feint|dodge_left|dodge_right|block> <peak_dps>\n");
+      }
+    }
   }
 }
 

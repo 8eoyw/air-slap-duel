@@ -5,7 +5,10 @@ __pycache__/
 ml/out/
 results/raw/
 build/
+build_ttl*/
+build_ttl_*/
 .vscode/
+.workbuddy/
 *.tflite
 README.zh-TW.md
 data_synth/

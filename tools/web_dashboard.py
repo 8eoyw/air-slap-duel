@@ -18,6 +18,7 @@ Also packaged as a single exe (PyInstaller), which runs in the auto mode when do
 """
 import argparse
 import json
+import os
 import queue
 import re
 import subprocess
@@ -201,7 +202,9 @@ class StreamSource:
         if self.path is None:
             for line in sys.stdin:
                 parse(line, self.hub)
-            return
+            # The producer closed the pipe (bridge killed, terminal closed). Exit
+            # instead of lingering and holding the HTTP port for the next run.
+            os._exit(0)
         last = None
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not self.fast:
@@ -315,6 +318,9 @@ def main():
     g.add_argument("--keys", action="store_true", help="play both sides on the keyboard (build/sim_keys)")
     g.add_argument("--stdin", action="store_true", help="JSON lines on stdin")
     g.add_argument("--replay", type=Path, help="JSONL log written by --log or dashboard.py")
+    ap.add_argument("--play", action="store_true",
+                    help="--port: enable keyboard events on the page and forward them to the "
+                         "referee (standalone firmware with the `ev` hook)")
     ap.add_argument("--fast", action="store_true", help="--replay: no pacing, jump to the end")
     ap.add_argument("--latency", type=int, default=515, help="--sim: event latency in ms")
     ap.add_argument("--log", type=Path, help="append every message to this JSONL file")
@@ -336,9 +342,11 @@ def main():
         args.keys = args.port is None
         print(f"auto: {'referee on ' + args.port if args.port else 'no referee board found, keyboard play'}",
               file=sys.stderr)
+    if args.play and not args.port:
+        ap.error("--play needs --port (keyboard events are forwarded to the referee board)")
     if args.log:
         args.log.parent.mkdir(parents=True, exist_ok=True)
-    hub = Hub(args.log, "keys" if args.keys else "referee")
+    hub = Hub(args.log, "keys" if (args.keys or args.play) else "referee")
     if args.port:
         source = SerialSource(args.port, hub)
     elif args.keys:
